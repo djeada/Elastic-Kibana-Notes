@@ -100,7 +100,7 @@ When Elasticsearch 8.0+ starts for the first time, it performs the following act
   Authentication is enabled and cluster connections are encrypted.
 
   Password for the elastic user:
-    p4ssw0rd-RANDOMLY-g3n3r4t3d
+    xK9mP2nQ8vL3wR4tYj6bZs5d
 
   HTTP CA certificate SHA-256 fingerprint:
     a1b2c3d4e5f6...
@@ -633,9 +633,9 @@ Service tokens are created using the `elasticsearch-service-tokens` command-line
 
 ```
   # Create a service token for Kibana
-  bin/elasticsearch-service-tokens create elastic/kibana my-kibana-token
+  bin/elasticsearch-service-tokens create elastic/kibana kibana-prod-instance-01
 
-  SERVICE_TOKEN elastic/kibana/my-kibana-token = AAEAAWVs...long-token-value...
+  SERVICE_TOKEN elastic/kibana/kibana-prod-instance-01 = AAEAAWVs...long-token-value...
 
   # List existing service tokens
   bin/elasticsearch-service-tokens list
