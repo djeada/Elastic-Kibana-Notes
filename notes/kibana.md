@@ -29,7 +29,7 @@ into Elasticsearch API calls, retrieves results, and renders them back to the cl
   │  - Visualizations  │         │  │  Saved Objects Store      │ │
   │  - Dev Tools       │         │  │  (.kibana system index)   │ │
   │  - Discover        │         │  │                           │ │
-  │                    │         │  │  - Index Patterns         │ │
+  │                    │         │  │  - Data Views             │ │
   └────────────────────┘         │  │  - Dashboards             │ │
                                  │  │  - Visualizations         │ │
                                  │  │  - Saved Searches         │ │
