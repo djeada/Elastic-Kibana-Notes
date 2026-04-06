@@ -426,7 +426,7 @@ Certain query types are inherently expensive and should be avoided or constraine
   +------------------------+-----------------------------------------------+
   | Query Type             | Why It Is Expensive                           |
   +------------------------+-----------------------------------------------+
-  | Leading wildcard       | query: "*earch" must scan every term in the   |
+  | Leading wildcard       | query: "*search" must scan every term in the  |
   | (wildcard, prefix)     | inverted index for every segment              |
   +------------------------+-----------------------------------------------+
   | Regular expressions    | Regex evaluation against all terms; cannot    |
@@ -1350,8 +1350,8 @@ consequences:
   | Using from+size for deep pagination   | Each shard must produce from+size results;  |
   |                                       | memory and CPU cost grows linearly          |
   +---------------------------------------+---------------------------------------------+
-  | Scoring clauses in filter context     | Wastes CPU on relevance scoring that is     |
-  | positions                             | never used; prevents caching                |
+  | Using scoring queries where filters   | Wastes CPU on relevance scoring that is     |
+  | suffice                               | never used; prevents caching                |
   +---------------------------------------+---------------------------------------------+
   | Leading wildcard queries in           | Scans every term in the inverted index;     |
   | production                            | cannot be optimized                         |
