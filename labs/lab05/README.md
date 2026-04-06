@@ -279,8 +279,11 @@ for analyzer in analyzers:
     url = f"{ES_URL}/articles/_analyze" if analyzer == "custom_content" \
           else f"{ES_URL}/_analyze"
     payload = {"analyzer": analyzer, "text": sample_text}
-    result = requests.get(url, json=payload).json()
-    tokens = [t["token"] for t in result.get("tokens", [])]
+    resp = requests.get(url, json=payload)
+    if resp.status_code != 200:
+        print(f"[{analyzer}] ERROR {resp.status_code}: {resp.text}")
+        continue
+    tokens = [t["token"] for t in resp.json().get("tokens", [])]
     print(f"[{analyzer}] {tokens}")
 ```
 
@@ -301,7 +304,7 @@ Expected output:
 
 | Symptom | Likely Cause | Solution |
 |---|---|---|
-| Search returns no results | Analyzer mismatch between index and query time | Ensure `search_analyzer` is compatible with the index analyzer |
+| Search returns no results | Analyzer mismatch between index and query time | Verify both analyzers produce compatible tokens: test with `GET /<index>/_analyze` using each analyzer |
 | Aggregation shows individual words | Aggregating on a `text` field | Use a `.keyword` sub-field |
 | `mapper_parsing_exception` | Field value doesn't match mapping type | Check mapping with `GET /<index>/_mapping` |
 | Cannot change field type | Fields are immutable once created | Reindex into a new index |
