@@ -1,22 +1,10 @@
 ## Aggregations
 
-Aggregations are the primary analytics framework in Elasticsearch, enabling you to compute
-summaries, statistics, and groupings over your indexed data without extracting raw documents.
-Where a search query answers "which documents match?", an aggregation answers "what patterns
-exist across the matching documents?" This makes aggregations the backbone of dashboards,
-reports, and real-time analytics built on top of Elasticsearch.
+Aggregations are the primary analytics framework in Elasticsearch, enabling you to compute summaries, statistics, and groupings over your indexed data without extracting raw documents. Where a search query answers "which documents match?", an aggregation answers "what patterns exist across the matching documents?" This makes aggregations the backbone of dashboards, reports, and real-time analytics built on top of Elasticsearch.
 
-Traditional relational databases serve a similar purpose with `GROUP BY` and aggregate functions
-like `SUM()` and `AVG()`. Elasticsearch aggregations go further by operating on distributed,
-denormalized data at scale -- computing results across millions of documents spread over many
-shards in near real-time. Because aggregations run within the same request as a search query,
-they can be scoped to any subset of documents defined by the Query DSL, allowing you to combine
-full-text search with analytic computation in a single round-trip.
+Traditional relational databases serve a similar purpose with `GROUP BY` and aggregate functions like `SUM()` and `AVG()`. Elasticsearch aggregations go further by operating on distributed, denormalized data at scale -- computing results across millions of documents spread over many shards in near real-time. Because aggregations run within the same request as a search query, they can be scoped to any subset of documents defined by the Query DSL, allowing you to combine full-text search with analytic computation in a single round-trip.
 
-Aggregations are composable: you can nest a metric aggregation inside a bucket aggregation,
-chain pipeline aggregations that consume the output of other aggregations, and build multi-level
-hierarchies that mirror the dimensional structure of your data. This composability is what makes
-the framework powerful enough to replace many traditional OLAP workloads.
+Aggregations are composable: you can nest a metric aggregation inside a bucket aggregation, chain pipeline aggregations that consume the output of other aggregations, and build multi-level hierarchies that mirror the dimensional structure of your data. This composability is what makes the framework powerful enough to replace many traditional OLAP workloads.
 
 ### The Aggregation Pipeline
 
@@ -33,29 +21,29 @@ Elasticsearch, from query execution to the final aggregated response:
  │  matching documents. If no query is specified, a match_all is       │
  │  implied, and every document in the index participates.             │
  │                                                                     │
- │  Index Docs: [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10]            │
- │  Query Match: [d1, d3, d4, d7, d9, d10]                            │
+ │  Index Docs: [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10]              │
+ │  Query Match: [d1, d3, d4, d7, d9, d10]                             │
  └──────────────────────────────┬──────────────────────────────────────┘
                                 │
                                 ▼
- ┌─────────────────────────────────────────────────────────────────────┐
- │                    BUCKET FORMATION                                  │
- │  Bucket aggregations partition the matched documents into groups.    │
- │  Each bucket defines a criterion (term value, range, date interval). │
- │                                                                     │
- │  terms agg on "status":                                             │
- │    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │
- │    │ status=200   │  │ status=404   │  │ status=500   │            │
- │    │ [d1, d4, d9] │  │ [d3, d10]    │  │ [d7]         │            │
- │    │ doc_count: 3 │  │ doc_count: 2 │  │ doc_count: 1 │            │
- │    └──────┬───────┘  └──────┬───────┘  └──────┬───────┘            │
- │           │                 │                 │                     │
- └───────────┼─────────────────┼─────────────────┼─────────────────────┘
+ ┌───────────────────────────────────────────────────────────────────────┐
+ │                    BUCKET FORMATION                                   │
+ │  Bucket aggregations partition the matched documents into groups.     │
+ │  Each bucket defines a criterion (term value, range, date interval).  │
+ │                                                                       │
+ │  terms agg on "status":                                               │
+ │    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+ │    │ status=200   │  │ status=404   │  │ status=500   │               │
+ │    │ [d1, d4, d9] │  │ [d3, d10]    │  │ [d7]         │               │
+ │    │ doc_count: 3 │  │ doc_count: 2 │  │ doc_count: 1 │               │
+ │    └──────┬───────┘  └──────┬───────┘  └──────┬───────┘               │
+ │           │                 │                 │                       │
+ └───────────┼─────────────────┼─────────────────┼───────────────────────┘
              │                 │                 │
              ▼                 ▼                 ▼
  ┌─────────────────────────────────────────────────────────────────────┐
- │                   METRIC COMPUTATION                                 │
- │  Metric aggregations compute statistics within each bucket.          │
+ │                   METRIC COMPUTATION                                │
+ │  Metric aggregations compute statistics within each bucket.         │
  │                                                                     │
  │  avg("response_time"):                                              │
  │    status=200 → avg: 120.5ms                                        │
@@ -65,7 +53,7 @@ Elasticsearch, from query execution to the final aggregated response:
                                 │
                                 ▼
  ┌─────────────────────────────────────────────────────────────────────┐
- │                   PIPELINE AGGREGATIONS                              │
+ │                   PIPELINE AGGREGATIONS                             │
  │  Pipeline aggs consume output of other aggs (optional stage).       │
  │                                                                     │
  │  max_bucket("avg_response_time"):                                   │
