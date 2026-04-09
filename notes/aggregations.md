@@ -84,15 +84,11 @@ derives new values from the output of those bucket-metric combinations.
 
 ### Metric Aggregations
 
-Metric aggregations extract numeric values from document fields and compute statistics. They do
-not create buckets -- they produce a single numeric result (single-value metrics) or a JSON
-object with multiple statistics (multi-value metrics). Metric aggregations can run at the top
-level of a request or nested inside a bucket aggregation.
+Metric aggregations extract numeric values from document fields and compute statistics. They donot create buckets -- they produce a single numeric result (single-value metrics) or a JSON object with multiple statistics (multi-value metrics). Metric aggregations can run at the top level of a request or nested inside a bucket aggregation.
 
 #### Single-Value Metrics: avg, sum, min, max
 
-The simplest metric aggregations each return a single number. Consider an index of e-commerce
-orders where each document has a `price` field and a `quantity` field.
+The simplest metric aggregations each return a single number. Consider an index of e-commerce orders where each document has a `price` field and a `quantity` field.
 
 ```json
 GET /orders/_search
@@ -130,15 +126,11 @@ GET /orders/_search
 }
 ```
 
-Because `"size": 0` is set, no hits are returned in the response -- only the aggregation results.
-This is a critical optimization discussed in detail later in this document.
+Because `"size": 0` is set, no hits are returned in the response -- only the aggregation results. This is a critical optimization discussed in detail later in this document.
 
 #### Multi-Value Metrics: stats and extended_stats
 
-The `stats` aggregation returns `count`, `min`, `max`, `avg`, and `sum` in a single request,
-avoiding the overhead of running five separate aggregations. The `extended_stats` aggregation
-adds `sum_of_squares`, `variance`, `variance_population`, `variance_sampling`, `std_deviation`,
-and `std_deviation_bounds` for statistical analysis.
+The `stats` aggregation returns `count`, `min`, `max`, `avg`, and `sum` in a single request, avoiding the overhead of running five separate aggregations. The `extended_stats` aggregation adds `sum_of_squares`, `variance`, `variance_population`, `variance_sampling`, `std_deviation`, and `std_deviation_bounds` for statistical analysis.
 
 ```json
 GET /orders/_search
@@ -205,8 +197,7 @@ GET /orders/_search
 }
 ```
 
-The `std_deviation_bounds` are useful for anomaly detection: values outside the upper or lower
-bound (typically two standard deviations from the mean) can be flagged as outliers.
+The `std_deviation_bounds` are useful for anomaly detection: values outside the upper or lower bound (typically two standard deviations from the mean) can be flagged as outliers.
 
 #### value_count and cardinality
 
@@ -986,7 +977,7 @@ The performance impact is significant:
  │                                                                │
  │  Benefits:                                                     │
  │  - No _source field deserialization                            │
- │  - No network transfer of document bodies                     │
+ │  - No network transfer of document bodies                      │
  │  - Reduced heap pressure on coordinating node                  │
  │  - Response payload is dramatically smaller                    │
  └────────────────────────────────────────────────────────────────┘
@@ -995,13 +986,13 @@ The performance impact is significant:
  │                   WITH default size: 10                        │
  │                                                                │
  │  1. Query Phase   →  Match documents, build aggregation data   │
- │  2. Fetch Phase   →  Load _source for top 10 documents        │
+ │  2. Fetch Phase   →  Load _source for top 10 documents         │
  │  3. Response      →  Aggregation results + 10 hit documents    │
  │                                                                │
  │  Overhead:                                                     │
- │  - Additional shard round-trip for fetch phase                │
- │  - _source deserialization and network transfer               │
- │  - Larger response payload                                    │
+ │  - Additional shard round-trip for fetch phase                 │
+ │  - _source deserialization and network transfer                │
+ │  - Larger response payload                                     │
  └────────────────────────────────────────────────────────────────┘
 ```
 
