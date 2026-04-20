@@ -50,6 +50,7 @@ Elasticsearch is a powerful, distributed search and analytics engine built on Ap
 | 10  | Securing Your Elasticsearch Cluster                                     | [LAB](https://github.com/djeada/Elastic-Kibana-Notes/tree/main/labs/lab10)                                                                                  |
 | 11  | Dashboarding with Kibana and Python Data Visualization                    | [LAB](https://github.com/djeada/Elastic-Kibana-Notes/tree/main/labs/lab11)                                                                                  |
 | 12  | Performance Tuning, Snapshot Backup, and Recovery                       | [LAB](https://github.com/djeada/Elastic-Kibana-Notes/tree/main/labs/lab12)                                                                                  |
+| 13  | SQL Compatibility with Elasticsearch                                    | [LAB](https://github.com/djeada/Elastic-Kibana-Notes/tree/main/labs/lab13)                                                                                  |
 
 ## Prerequisites
 
@@ -102,7 +103,7 @@ To set up the environment locally, follow these steps:
 Once installed, you can start exploring the repository:
 
 - **Read the Documentation:**  
-  Start with the detailed notes in the `docs` folder to understand the lab procedures and the underlying concepts.
+  Start with the detailed notes in the `notes` folder, including `notes/sql_compatibility.md`, to understand the lab procedures and the underlying concepts.
   
 - **Run Labs:**  
   Navigate to the lab directories and follow the step-by-step guides to execute REST API calls manually and through automated Python scripts.
