@@ -1,31 +1,30 @@
 ## Task 1: Environment Setup, Cluster Basics, and Verification
 
 **Objectives:**
+
 - Install Elasticsearch and Kibana locally via Docker.
 - Understand cluster fundamentals: nodes, shards, replicas.
 - Verify installation via raw REST calls (Kibana), curl, and Python scripts.
 - Learn to interpret cluster health and node information.
 
----
-
 ### Architecture Overview
 
 ```
 +-----------------------------------------------------------+
-|                    HOST MACHINE                            |
+|                    HOST MACHINE                           |
 |                                                           |
-|   +---------------------+    +----------------------+    |
-|   |  Elasticsearch      |    |  Kibana              |    |
-|   |  Container          |    |  Container           |    |
-|   |                     |    |                      |    |
-|   |  +---------------+  |    |  +----------------+  |    |
-|   |  |  ES Node      |  |    |  |  Web UI        |  |    |
-|   |  |  (master +    |  |<---|  |  Dev Tools     |  |    |
-|   |  |   data)       |  |    |  |  Dashboards    |  |    |
-|   |  +---------------+  |    |  +----------------+  |    |
-|   |                     |    |                      |    |
-|   |  Port: 9200 --------+----+---- Port: 5601      |    |
-|   +---------------------+    +----------------------+    |
+|   +---------------------+    +----------------------+     |
+|   |  Elasticsearch      |    |  Kibana              |     |
+|   |  Container          |    |  Container           |     |
+|   |                     |    |                      |     |
+|   |  +---------------+  |    |  +----------------+  |     |
+|   |  |  ES Node      |  |    |  |  Web UI        |  |     |
+|   |  |  (master +    |  |<---|  |  Dev Tools     |  |     |
+|   |  |   data)       |  |    |  |  Dashboards    |  |     |
+|   |  +---------------+  |    |  +----------------+  |     |
+|   |                     |    |                      |     |
+|   |  Port: 9200 --------+----+---- Port: 5601       |     |
+|   +---------------------+    +----------------------+     |
 |                                                           |
 |   Browser --> http://localhost:5601  (Kibana UI)          |
 |   curl    --> http://localhost:9200  (ES REST API)        |
@@ -43,17 +42,15 @@
 |  |  Node: single-node (master + data) |  |
 |  |                                    |  |
 |  |  Index: "products"                 |  |
-|  |  +----------+  +----------+       |  |
-|  |  | Primary  |  | Primary  |       |  |
-|  |  | Shard 0  |  | Shard 1  |  ...  |  |
-|  |  +----------+  +----------+       |  |
+|  |  +----------+  +----------+        |  |
+|  |  | Primary  |  | Primary  |        |  |
+|  |  | Shard 0  |  | Shard 1  |  ...   |  |
+|  |  +----------+  +----------+        |  |
 |  |                                    |  |
 |  |  (Replicas = 0 in single-node)     |  |
 |  +------------------------------------+  |
 +------------------------------------------+
 ```
-
----
 
 ### Lab Steps
 
@@ -96,13 +93,12 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
 **Expected Output:**
+
 ```
 NAMES           STATUS          PORTS
 kibana          Up 2 minutes    0.0.0.0:5601->5601/tcp
 elasticsearch   Up 3 minutes    0.0.0.0:9200->9200/tcp, 9300/tcp
 ```
-
----
 
 ### Step 2: Cluster Verification via Kibana
 
@@ -140,8 +136,6 @@ curl -s http://localhost:9200/ | python3 -m json.tool
 }
 ```
 
----
-
 ### Step 3: Check Cluster Health
 
 **In Kibana Dev Tools:**
@@ -151,11 +145,13 @@ GET /_cluster/health
 ```
 
 **Equivalent curl command:**
+
 ```bash
 curl -s http://localhost:9200/_cluster/health?pretty
 ```
 
 **Expected Output:**
+
 ```json
 {
   "cluster_name": "docker-cluster",
@@ -188,7 +184,6 @@ curl -s http://localhost:9200/_cluster/health?pretty
 | `unassigned_shards` | Shards waiting to be assigned to a node |
 | `active_shards_percent_as_number` | Percentage of active shards -- 100.0 means fully healthy |
 
----
 
 ### Step 4: Check Node Information
 
@@ -199,6 +194,7 @@ GET /_cat/nodes?v
 ```
 
 **Equivalent curl command:**
+
 ```bash
 curl -s http://localhost:9200/_cat/nodes?v
 ```
@@ -220,8 +216,6 @@ GET /_cat/nodes?v&h=name,version,jdk,disk.total,disk.used_percent
 name           version jdk       disk.total disk.used_percent
 abcdef123456   8.6.0   19.0.1    50gb       42.15
 ```
-
----
 
 ### Step 5: Verification via Python Script
 
@@ -266,6 +260,7 @@ for node_id, node in nodes['nodes'].items():
 ```
 
 **Expected Output:**
+
 ```
 === Cluster Info ===
 Cluster Name : docker-cluster
@@ -283,8 +278,6 @@ Heap Used    : 198 MB
 Heap Max     : 512 MB
 ```
 
----
-
 ### Step 6: Concept Discussion
 
 In your lab journal, describe the following:
@@ -294,8 +287,6 @@ In your lab journal, describe the following:
 - **Replica**: A copy of a primary shard on a different node. Replicas provide high availability and can serve read requests to improve throughput.
 
 > **Why distributed architecture?** Spreading data across multiple nodes and shards allows Elasticsearch to handle datasets far larger than a single machine, parallelize search and indexing, and survive node failures without data loss.
-
----
 
 ### Troubleshooting Tips
 
