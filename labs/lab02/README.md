@@ -437,17 +437,52 @@ GET /products/_count
 
 ### Step 7: Optimistic Concurrency Control
 
-Elasticsearch uses `_seq_no` and `_primary_term` to prevent conflicting writes. This is essential in multi-client environments.
+When multiple clients can update the same document at the same time, there’s always a risk that one update could accidentally overwrite another.
 
-**First, read the current document to get its sequence number:**
+Elasticsearch avoids this with **optimistic concurrency control**, using two internal metadata fields:
+
+* **`_seq_no` (sequence number)** → increments every time the document changes.
+* **`_primary_term`** → changes when the shard’s primary changes (for example after failover).
+
+Together, these values let Elasticsearch verify:
+
+> “Are you updating the exact version of the document you originally read?”
+
+If the answer is **yes**, the update proceeds.
+If not, Elasticsearch rejects it with a conflict instead of silently overwriting newer data.
+
+This is especially useful in distributed systems where many services or users may write to the same document concurrently.
+
+**Read the document first**
+
+Before updating, fetch the current document so you can retrieve its latest `_seq_no` and `_primary_term`.
 
 ```http
 GET /products/_doc/10
 ```
 
-Note the `_seq_no` and `_primary_term` values from the response.
+The response will include metadata similar to:
 
-**Then, update using those values for concurrency safety:**
+```json
+{
+  "_index": "products",
+  "_id": "10",
+  "_seq_no": 5,
+  "_primary_term": 1,
+  "_source": {
+    "name": "Laptop",
+    "price": 39.99
+  }
+}
+```
+
+At this point, your application is essentially saying:
+
+> “I’m reading document `10` as it currently exists at sequence number `5`.”
+
+**Send the update with those values**
+
+Now include those values in your update request using `if_seq_no` and `if_primary_term`.
 
 ```json
 POST /products/_update/10?if_seq_no=5&if_primary_term=1
@@ -456,7 +491,17 @@ POST /products/_update/10?if_seq_no=5&if_primary_term=1
 }
 ```
 
-**Expected Output (success):**
+This tells Elasticsearch:
+
+> “Only perform this update **if** document `10` is still at `_seq_no=5` and `_primary_term=1`.”
+
+This acts like a safety check before writing.
+
+**Successful update**
+
+If no one changed the document since you read it, Elasticsearch applies the update.
+
+**Expected Output:**
 
 ```json
 {
@@ -469,7 +514,26 @@ POST /products/_update/10?if_seq_no=5&if_primary_term=1
 }
 ```
 
-**If another client already modified the document (conflict):**
+Notice the `_seq_no` changed from `5` → `6`.
+
+That’s Elasticsearch recording:
+
+> “This document has been modified again, so it now has a new version.”
+
+Any future update must use this new sequence number.
+
+**What happens if another client updates first?**
+
+Imagine this sequence:
+
+1. **Client A** reads document `10` → `_seq_no = 5`
+2. **Client B** updates the document before Client A sends its update
+3. Elasticsearch increments `_seq_no` to `6`
+4. Client A now tries updating with stale values (`if_seq_no=5`)
+
+Elasticsearch detects the mismatch and rejects the request.
+
+**Conflict response:**
 
 ```json
 {
@@ -481,7 +545,46 @@ POST /products/_update/10?if_seq_no=5&if_primary_term=1
 }
 ```
 
-> **Tip:** On a 409 conflict, re-read the document to get the latest `_seq_no`, then retry your update.
+The important part is:
+
+```text
+required seqNo [5]
+current document has seqNo [6]
+```
+
+Meaning:
+
+> “You tried to update an older version of the document. Someone else already modified it.”
+
+This prevents accidental overwrites.
+
+**Why this matters**
+
+Without optimistic concurrency control:
+
+* Client A reads `price = 39.99`
+* Client B changes it to `45.00`
+* Client A updates it to `42.00`
+
+Client B’s update gets lost.
+
+With concurrency control enabled, Client A gets a `409 Conflict` instead, so it knows the document changed in the meantime.
+
+This protects against **lost updates**.
+
+**Retry strategy after conflict**
+
+A `409` isn’t necessarily an error—it just means your copy of the document is outdated.
+
+A common retry flow looks like this:
+
+1. **GET** the latest document
+2. Read the new `_seq_no` and `_primary_term`
+3. Re-apply your changes if they still make sense
+4. Retry the update with the new values
+
+> **Tip:** When you receive a `409 Conflict`, re-fetch the document first to get the latest `_seq_no` and `_primary_term`, then retry the update.
+> This is the standard pattern for safe concurrent updates in Elasticsearch.
 
 ### Step 8: CRUD Operations Using Python
 
