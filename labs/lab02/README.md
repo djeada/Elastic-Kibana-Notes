@@ -34,7 +34,9 @@
 
 ### Lab Steps
 
-Before you start make sure both containers are up and running:
+Before you begin, make sure both containers are running.
+
+Start **Elasticsearch**:
 
 ```bash
 docker run -d \
@@ -46,12 +48,25 @@ docker run -d \
   docker.elastic.co/elasticsearch/elasticsearch:8.6.0
 ```
 
+Then start **Kibana**:
+
 ```bash
 docker run -d \
   --name kibana \
   -p 5601:5601 \
   --link elasticsearch:elasticsearch \
   docker.elastic.co/kibana/kibana:8.6.0
+```
+
+Verify that both services are accessible:
+
+* **Elasticsearch:** `http://localhost:9200`
+* **Kibana:** `http://localhost:5601`
+
+You can confirm Elasticsearch is running by opening `http://localhost:9200` in your browser or by running:
+
+```bash
+curl http://localhost:9200
 ```
 
 ### Step 1: Create an Index with Custom Settings
