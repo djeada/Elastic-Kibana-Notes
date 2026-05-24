@@ -1,13 +1,12 @@
 ## Task 3: Basic Searching with Query DSL
 
 **Objectives:**
+
 - Construct search queries using Query DSL via Kibana and curl.
 - Learn the syntax of match, term, range, match_phrase, wildcard, and bool queries.
 - Understand full-text search versus exact matching.
 - Understand relevance scoring (`_score`) and how Elasticsearch ranks results.
 - Combine queries with bool (must, should, must_not, filter).
-
----
 
 ### Query Execution Flow
 
@@ -41,9 +40,44 @@
 +-----------------------------------------------------------+
 ```
 
----
+### Prerequisite
 
-### Prerequisite: Seed Sample Data
+Before you begin, make sure both containers are running.
+
+Start **Elasticsearch**:
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+```
+
+Then start **Kibana**:
+
+```bash
+docker run -d \
+  --name kibana \
+  -p 5601:5601 \
+  --link elasticsearch:elasticsearch \
+  docker.elastic.co/kibana/kibana:8.6.0
+```
+
+Verify that both services are accessible:
+
+* **Elasticsearch:** `http://localhost:9200`
+* **Kibana:** `http://localhost:5601`
+
+You can confirm Elasticsearch is running by opening `http://localhost:9200` in your browser or by running:
+
+```bash
+curl http://localhost:9200
+```
+
+#### Seed Sample Data
 
 Before searching, load sample documents so queries return meaningful results:
 
