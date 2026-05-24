@@ -1,12 +1,11 @@
 ## Task 4: Data Aggregations for Analytics
 
 **Objectives:**
+
 - Use metric, bucket, and pipeline aggregations to analyze indexed data.
 - Understand the aggregation pipeline: buckets → metrics → pipelines.
 - Build nested aggregations for multi-dimensional analysis.
 - Visualize aggregated data via raw queries, curl, and Python.
-
----
 
 ### Aggregation Pipeline Architecture
 
@@ -19,7 +18,7 @@
 │                                                          │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │  1. BUCKET AGGREGATIONS                            │  │
-│  │     Split documents into groups (buckets)           │  │
+│  │     Split documents into groups (buckets)          │  │
 │  │                                                    │  │
 │  │     terms ──► group by field value                 │  │
 │  │     range ──► group by numeric/date ranges         │  │
@@ -30,7 +29,7 @@
 │                     ▼                                    │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │  2. METRIC AGGREGATIONS                            │  │
-│  │     Compute statistics within each bucket           │  │
+│  │     Compute statistics within each bucket          │  │
 │  │                                                    │  │
 │  │     avg ──────► average value                      │  │
 │  │     sum ──────► total sum                          │  │
@@ -43,7 +42,7 @@
 │                     ▼                                    │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │  3. PIPELINE AGGREGATIONS                          │  │
-│  │     Compute over other aggregation results          │  │
+│  │     Compute over other aggregation results         │  │
 │  │                                                    │  │
 │  │     avg_bucket ──► average across buckets          │  │
 │  │     max_bucket ──► bucket with highest value       │  │
@@ -52,9 +51,44 @@
 └──────────────────────────────────────────────────────────┘
 ```
 
----
+### Prerequisite
 
-### Prerequisite: Seed Sample Data
+Before you begin, make sure both containers are running.
+
+Start **Elasticsearch**:
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+```
+
+Then start **Kibana**:
+
+```bash
+docker run -d \
+  --name kibana \
+  -p 5601:5601 \
+  --link elasticsearch:elasticsearch \
+  docker.elastic.co/kibana/kibana:8.6.0
+```
+
+Verify that both services are accessible:
+
+* **Elasticsearch:** `http://localhost:9200`
+* **Kibana:** `http://localhost:5601`
+
+You can confirm Elasticsearch is running by opening `http://localhost:9200` in your browser or by running:
+
+```bash
+curl http://localhost:9200
+```
+
+#### Seed Sample Data
 
 Load diverse products so aggregations return meaningful results:
 
