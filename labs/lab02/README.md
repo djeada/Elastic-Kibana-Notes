@@ -1,41 +1,58 @@
 ## Task 2: Index Creation, CRUD Operations, and Data Validation
 
 **Objectives:**
+
 - Create an index with custom settings and mappings.
 - Perform document create, read, update, and delete (CRUD) operations.
 - Learn bulk operations for efficient multi-document indexing.
 - Understand `_source` filtering and optimistic concurrency control.
 - Validate operations using both Kibana's Dev Tools, curl, and Python.
 
----
-
 ### CRUD Document Lifecycle
 
 ```
-  +--------------------------------------------------------------+
-  |                   DOCUMENT LIFECYCLE                         |
-  |                                                              |
-  |   CREATE            READ              UPDATE         DELETE  |
-  |   (POST/PUT)        (GET)             (POST _update) (DELETE)|
-  |                                                              |
-  |   +------+       +------+          +------+      +------+   |
-  |   | JSON |------>|Index |--------->|Merge |----->|Remove|   |
-  |   | Body | index |Stored| retrieve |Fields| mark | From |   |
-  |   +------+       +--+---+          +--+---+ del  +------+   |
+  +---------------------------------------------------------------+
+  |                   DOCUMENT LIFECYCLE                          |
+  |                                                               |
+  |   CREATE            READ              UPDATE         DELETE   |
+  |   (POST/PUT)        (GET)             (POST _update) (DELETE) |
+  |                                                               |
+  |   +------+       +------+          +------+      +------+     |
+  |   | JSON |------>|Index |--------->|Merge |----->|Remove|     |
+  |   | Body | index |Stored| retrieve |Fields| mark | From |     |
+  |   +------+       +--+---+          +--+---+ del  +------+     |
   |                     |                  |                      |
   |              _id assigned        _version bumped              |
   |              _version = 1        _seq_no incremented          |
-  |                                                              |
-  |   +------------------------------------------------------+   |
-  |   |          Inverted Index (Lucene Segments)            |   |
-  |   |  term -> [doc1, doc3, ...]   (for full-text search)  |   |
-  |   +------------------------------------------------------+   |
-  +--------------------------------------------------------------+
+  |                                                               |
+  |   +------------------------------------------------------+    |
+  |   |          Inverted Index (Lucene Segments)            |    |
+  |   |  term -> [doc1, doc3, ...]   (for full-text search)  |    |
+  |   +------------------------------------------------------+    |
+  +---------------------------------------------------------------+
 ```
 
----
-
 ### Lab Steps
+
+Before you start make sure both containers are up and running:
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+```
+
+```bash
+docker run -d \
+  --name kibana \
+  -p 5601:5601 \
+  --link elasticsearch:elasticsearch \
+  docker.elastic.co/kibana/kibana:8.6.0
+```
 
 ### Step 1: Create an Index with Custom Settings
 
@@ -62,6 +79,7 @@ PUT /products
 ```
 
 **Equivalent curl command:**
+
 ```bash
 curl -s -X PUT "http://localhost:9200/products" \
   -H "Content-Type: application/json" \
@@ -81,6 +99,7 @@ curl -s -X PUT "http://localhost:9200/products" \
 ```
 
 **Expected Output:**
+
 ```json
 {
   "acknowledged": true,
@@ -96,6 +115,7 @@ GET /products
 ```
 
 **Expected Output (excerpt):**
+
 ```json
 {
   "products": {
@@ -120,8 +140,6 @@ GET /products
 }
 ```
 
----
-
 ### Step 2: Create (Index) Documents
 
 **Create a document with an auto-generated ID:**
@@ -139,6 +157,7 @@ POST /products/_doc
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -166,6 +185,7 @@ PUT /products/_doc/1
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -178,8 +198,6 @@ PUT /products/_doc/1
 }
 ```
 
----
-
 ### Step 3: Read Documents
 
 **Retrieve a document by ID:**
@@ -189,6 +207,7 @@ GET /products/_doc/1
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -219,6 +238,7 @@ GET /products/_doc/1?_source_includes=name,price
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -238,6 +258,7 @@ GET /products/_doc/1?_source_excludes=description,created_at
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -252,8 +273,6 @@ GET /products/_doc/1?_source_excludes=description,created_at
 }
 ```
 
----
-
 ### Step 4: Update Documents
 
 **Partial update -- change the price:**
@@ -266,6 +285,7 @@ POST /products/_update/1
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -285,6 +305,7 @@ GET /products/_doc/1?_source_includes=name,price
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -310,6 +331,7 @@ POST /products/_update/1
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -319,8 +341,6 @@ POST /products/_update/1
 }
 ```
 
----
-
 ### Step 5: Delete Documents
 
 ```http
@@ -328,6 +348,7 @@ DELETE /products/_doc/1
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -347,6 +368,7 @@ GET /products/_doc/1
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_index": "products",
@@ -354,8 +376,6 @@ GET /products/_doc/1
   "found": false
 }
 ```
-
----
 
 ### Step 6: Bulk Operations with _bulk
 
@@ -372,6 +392,7 @@ POST /products/_bulk
 ```
 
 **Expected Output:**
+
 ```json
 {
   "took": 30,
@@ -391,14 +412,13 @@ GET /products/_count
 ```
 
 **Expected Output:**
+
 ```json
 {
   "count": 3,
   "_shards": { "total": 1, "successful": 1, "failed": 0 }
 }
 ```
-
----
 
 ### Step 7: Optimistic Concurrency Control
 
@@ -422,6 +442,7 @@ POST /products/_update/10?if_seq_no=5&if_primary_term=1
 ```
 
 **Expected Output (success):**
+
 ```json
 {
   "_index": "products",
@@ -434,6 +455,7 @@ POST /products/_update/10?if_seq_no=5&if_primary_term=1
 ```
 
 **If another client already modified the document (conflict):**
+
 ```json
 {
   "error": {
@@ -445,8 +467,6 @@ POST /products/_update/10?if_seq_no=5&if_primary_term=1
 ```
 
 > **Tip:** On a 409 conflict, re-read the document to get the latest `_seq_no`, then retry your update.
-
----
 
 ### Step 8: CRUD Operations Using Python
 
@@ -503,6 +523,7 @@ print(f"  result: {resp['result']}")
 ```
 
 **Expected Output:**
+
 ```
 Created document ID: kX3b8Y0BqZ...
   result : created
@@ -522,8 +543,6 @@ Deleted document kX3b8Y0BqZ...:
   result: deleted
 ```
 
----
-
 ### Troubleshooting Tips
 
 | Problem | Cause | Solution |
@@ -533,8 +552,6 @@ Deleted document kX3b8Y0BqZ...:
 | `mapper_parsing_exception` | Field value does not match mapping type | Check your mapping with `GET /products/_mapping` and fix the data |
 | `version_conflict_engine_exception` | Concurrency conflict on `if_seq_no` | Re-read the document, get the latest `_seq_no`, and retry |
 | `_bulk` reports `"errors": true` | One or more operations failed | Inspect individual items in the `items` array for the error details |
-
----
 
 ### Reflection
 
