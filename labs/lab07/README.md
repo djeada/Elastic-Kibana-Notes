@@ -1,24 +1,23 @@
 ## Task 7: Multi-Node Cluster Configuration and Monitoring
 
 **Objectives:**
+
 - Deploy and configure a multi‑node cluster for scalability.
 - Configure shard allocation, replicas, and node roles.
 - Use both raw API calls (Kibana) and Python scripts to monitor cluster health.
 - Understand node roles and shard allocation awareness.
 - Monitor cluster health using `_cat` APIs and custom scripts.
 
----
-
 ### Multi-Node Cluster Topology
 
 ```
-  ┌───────────────────────────────────────────────────────────────┐
-  │                    es_cluster (3 nodes)                        │
-  │                                                               │
+  ┌─────────────────────────────────────────────────────────────┐
+  │                    es_cluster (3 nodes)                     │
+  │                                                             │
   │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐        │
-  │  │    es1       │   │    es2       │   │    es3       │        │
-  │  │  (master,    │   │  (data,      │   │  (data,      │        │
-  │  │   data)      │   │   ingest)    │   │   ingest)    │        │
+  │  │    es1      │   │    es2      │   │    es3      │        │
+  │  │  (master,   │   │  (data,     │   │  (data,     │        │
+  │  │   data)     │   │   ingest)   │   │   ingest)   │        │
   │  │             │   │             │   │             │        │
   │  │ ┌─────────┐ │   │ ┌─────────┐ │   │ ┌─────────┐ │        │
   │  │ │products │ │   │ │products │ │   │ │products │ │        │
@@ -28,14 +27,12 @@
   │  │             │   │             │   │             │        │
   │  │ Port: 9200  │   │ Port: 9201  │   │ Port: 9202  │        │
   │  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘        │
-  │         │                 │                 │                │
-  │         └────── discovery.seed_hosts ───────┘                │
-  │                                                               │
-  │  P0, P1, P2 = primary shards    (rep) = replica shard        │
-  └───────────────────────────────────────────────────────────────┘
+  │         │                 │                 │               │
+  │         └────── discovery.seed_hosts ───────┘               │
+  │                                                             │
+  │  P0, P1, P2 = primary shards    (rep) = replica shard       │
+  └─────────────────────────────────────────────────────────────┘
 ```
-
----
 
 ### Task 7.1: Multi-Node Setup with Docker Compose
 
@@ -165,8 +162,6 @@ Wait ~30 seconds for the cluster to form, then verify:
 curl -s http://localhost:9200/_cluster/health?pretty
 ```
 
----
-
 ### Task 7.2: Node Roles Configuration
 
 Elasticsearch nodes can have different roles. Here's a summary:
@@ -181,6 +176,7 @@ Elasticsearch nodes can have different roles. Here's a summary:
 | `coordinating` | Route requests (no role set)      | Medium       |
 
 In production, dedicate roles:
+
 ```yaml
 # Dedicated master node (no data storage)
 - node.roles=master
