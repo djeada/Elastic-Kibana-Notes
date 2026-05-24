@@ -1,15 +1,13 @@
 ## Task 5: Defining Mappings and Creating Custom Analyzers
 
-### Overview
-
 Mappings define how Elasticsearch stores and indexes fields. Analyzers control how
 text is broken into searchable tokens. Together, they determine what you can search
 for and how results are ranked.
 
 ```
-        ┌──────────────── Analyzer Pipeline ────────────────┐
+        ┌──────────────── Analyzer Pipeline ──────────────────┐
         │                                                    │
- Input  │  Char Filters ──▶ Tokenizer ──▶ Token Filters     │  Indexed
+ Input  │  Char Filters ──▶ Tokenizer ──▶ Token Filters      │  Indexed
  Text ──│  (html_strip,     (standard,    (lowercase,        │──▶ Terms
         │   pattern_replace) whitespace)   stop, stemmer)    │
         └────────────────────────────────────────────────────┘
@@ -28,7 +26,42 @@ for and how results are ranked.
 - Build and test a custom analyzer with the `_analyze` API.
 - Automate analyzer testing with Python.
 
----
+### Prerequisite
+
+Before you begin, make sure both containers are running.
+
+Start **Elasticsearch**:
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+```
+
+Then start **Kibana**:
+
+```bash
+docker run -d \
+  --name kibana \
+  -p 5601:5601 \
+  --link elasticsearch:elasticsearch \
+  docker.elastic.co/kibana/kibana:8.6.0
+```
+
+Verify that both services are accessible:
+
+* **Elasticsearch:** `http://localhost:9200`
+* **Kibana:** `http://localhost:5601`
+
+You can confirm Elasticsearch is running by opening `http://localhost:9200` in your browser or by running:
+
+```bash
+curl http://localhost:9200
+```
 
 ### Step 1 — Dynamic vs. Explicit Mappings
 
