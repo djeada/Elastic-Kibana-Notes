@@ -5,7 +5,7 @@ text is broken into searchable tokens. Together, they determine what you can sea
 for and how results are ranked.
 
 ```
-        ┌──────────────── Analyzer Pipeline ──────────────────┐
+        ┌──────────────── Analyzer Pipeline ─────────────────┐
         │                                                    │
  Input  │  Char Filters ──▶ Tokenizer ──▶ Token Filters      │  Indexed
  Text ──│  (html_strip,     (standard,    (lowercase,        │──▶ Terms
