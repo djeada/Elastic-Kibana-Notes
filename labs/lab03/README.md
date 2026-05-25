@@ -42,7 +42,6 @@
 
 ### Prerequisite
 
-
 Before you begin, make sure both containers are running. If you already created them previously, you can start them instead of creating new ones:
 
 ```bash
@@ -103,8 +102,6 @@ POST /products/_bulk
 {"name": "Elastic Polo Shirt", "description": "Professional polo shirt with embroidered Elastic logo", "price": 34.99, "category": "clothing", "in_stock": true, "created_at": "2024-04-01"}
 ```
 
----
-
 ### Lab Steps
 
 ### Step 1: Match Query (Full-Text Search)
@@ -154,8 +151,6 @@ curl -s -X GET "http://localhost:9200/products/_search" \
 }
 ```
 
----
-
 ### Step 2: Term Query (Exact Match)
 
 The `term` query does **not** analyze the input -- it searches for the exact value. Use `keyword` fields for exact matching.
@@ -170,6 +165,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "hits": {
@@ -184,8 +180,6 @@ GET /products/_search
 ```
 
 > **Important:** `term` queries on `text` fields often fail because ES stores analyzed (lowercased, tokenized) terms. Always use `keyword` type fields for exact matching.
-
----
 
 ### Step 3: Range Query
 
@@ -206,6 +200,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "hits": {
@@ -236,6 +231,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "hits": {
@@ -249,8 +245,6 @@ GET /products/_search
   }
 }
 ```
-
----
 
 ### Step 4: Match Phrase Query
 
@@ -288,8 +282,6 @@ GET /products/_search
 
 > **Note:** `match_phrase` requires terms to appear in the exact order and adjacent to each other, unlike `match` which finds terms anywhere in the field.
 
----
-
 ### Step 5: Wildcard Query
 
 Pattern-based matching using `*` (any characters) and `?` (single character):
@@ -321,8 +313,6 @@ GET /products/_search
 ```
 
 > **Caution:** Wildcard queries with leading wildcards (`*shirt`) are expensive. Avoid them on large datasets.
-
----
 
 ### Step 6: Boolean Query (Combining Conditions)
 
@@ -399,8 +389,6 @@ GET /products/_search
 
 **Expected Output:** All clothing documents are returned, but those matching `should` clauses are ranked higher (higher `_score`).
 
----
-
 ### Step 7: Understanding Relevance Scoring (_score)
 
 Each document receives a `_score` based on BM25. Use `explain` to see how a score is calculated:
@@ -416,6 +404,7 @@ GET /products/_search
 ```
 
 **Expected Output (excerpt for one hit):**
+
 ```json
 {
   "_id": "1",
@@ -431,7 +420,7 @@ GET /products/_search
 }
 ```
 
-**Key scoring concepts:**
+**Scoring concepts:**
 
 | Factor | Meaning |
 |---|---|
@@ -440,8 +429,6 @@ GET /products/_search
 | **Field Length** | Shorter fields score higher because matches are more significant |
 
 > **Tip:** Use `filter` clauses instead of `must` when you do not need scoring (e.g., exact category matches). Filters are faster because ES can cache them.
-
----
 
 ### Step 8: Python Search Examples
 
@@ -496,6 +483,7 @@ for hit in resp['hits']['hits']:
 ```
 
 **Expected Output:**
+
 ```
 === Match Query: 'Elastic' ===
 Total hits: 2
@@ -514,8 +502,6 @@ Total hits: 4
   Elastic Polo Shirt (2024-04-01)
 ```
 
----
-
 ### Troubleshooting Tips
 
 | Problem | Cause | Solution |
@@ -524,8 +510,6 @@ Total hits: 4
 | Unexpected results from `match` | Default operator is OR (any term matches) | Add `"operator": "and"` to require all terms |
 | `_score` is always 0.0 | Using only `filter` clauses in bool | Move relevant clauses to `must` or `should` |
 | `search_phase_execution_exception` | Querying a field with wrong type (e.g., term on object) | Check mapping with `GET /products/_mapping` |
-
----
 
 ### Analysis
 
