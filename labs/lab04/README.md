@@ -53,9 +53,15 @@
 
 ### Prerequisite
 
-Before you begin, make sure both containers are running.
 
-Start **Elasticsearch**:
+Before you begin, make sure both containers are running. If you already created them previously, you can start them instead of creating new ones:
+
+```bash
+docker start elasticsearch
+docker start kibana
+```
+
+If the containers do not exist yet, create and run **Elasticsearch**:
 
 ```bash
 docker run -d \
@@ -67,7 +73,7 @@ docker run -d \
   docker.elastic.co/elasticsearch/elasticsearch:8.6.0
 ```
 
-Then start **Kibana**:
+Then create and run **Kibana**:
 
 ```bash
 docker run -d \
