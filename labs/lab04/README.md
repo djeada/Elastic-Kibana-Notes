@@ -118,8 +118,6 @@ POST /products/_bulk
 {"name": "Security Jacket", "price": 89.99, "category": "clothing", "in_stock": false, "created_at": "2024-06-01"}
 ```
 
----
-
 ### Lab Steps
 
 ### Step 1: Metric Aggregation — Average Price
@@ -159,8 +157,6 @@ curl -s -X GET "http://localhost:9200/products/_search" \
 
 > **Note:** `"size": 0` tells Elasticsearch to skip returning document hits — only aggregation results are returned.
 
----
-
 ### Step 2: Stats and Extended Stats
 
 **Stats (five-number summary):**
@@ -176,6 +172,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "aggregations": {
@@ -203,6 +200,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "aggregations": {
@@ -232,8 +230,6 @@ GET /products/_search
 }
 ```
 
----
-
 ### Step 3: Cardinality (Approximate Distinct Count)
 
 How many distinct categories exist?
@@ -251,6 +247,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "aggregations": {
@@ -260,8 +257,6 @@ GET /products/_search
   }
 }
 ```
-
----
 
 ### Step 4: Bucket Aggregation — Terms
 
@@ -295,8 +290,6 @@ GET /products/_search
 }
 ```
 
----
-
 ### Step 5: Histogram Aggregation
 
 Group products into price buckets with a fixed interval of $20:
@@ -317,6 +310,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "aggregations": {
@@ -332,8 +326,6 @@ GET /products/_search
   }
 }
 ```
-
----
 
 ### Step 6: Date Histogram Aggregation
 
@@ -356,6 +348,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "aggregations": {
@@ -372,8 +365,6 @@ GET /products/_search
   }
 }
 ```
-
----
 
 ### Step 7: Nested Aggregations (Bucket Inside Bucket)
 
@@ -396,6 +387,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "aggregations": {
@@ -446,6 +438,7 @@ GET /products/_search
 ```
 
 **Expected Output (excerpt):**
+
 ```json
 {
   "aggregations": {
@@ -476,8 +469,6 @@ GET /products/_search
 }
 ```
 
----
-
 ### Step 8: Pipeline Aggregations
 
 Pipeline aggregations compute values over the results of other aggregations.
@@ -507,6 +498,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "aggregations": {
@@ -547,6 +539,7 @@ GET /products/_search
 ```
 
 **Expected Output:**
+
 ```json
 {
   "aggregations": {
@@ -563,8 +556,6 @@ GET /products/_search
   }
 }
 ```
-
----
 
 ### Step 9: Python Aggregation and Visualization
 
@@ -642,6 +633,7 @@ for bucket in resp["aggregations"]["price_ranges"]["buckets"]:
 ```
 
 **Expected Output:**
+
 ```
 === Average Price by Category ===
 Category          Count  Avg Price
@@ -665,8 +657,6 @@ clothing              4      47.49
   $   80-$100   | ▓▓▓ (1)
 ```
 
----
-
 ### Troubleshooting Tips
 
 | Problem | Cause | Solution |
@@ -676,8 +666,6 @@ clothing              4      47.49
 | `"buckets_path"` error in pipeline agg | Incorrect path reference | Use `>` to separate nesting levels: `"parent_agg>child_agg"` |
 | Cardinality returns approximate values | Uses HyperLogLog++ algorithm | This is by design; set `"precision_threshold": 40000` for higher accuracy |
 | Very slow aggregation | Too many unique terms or large dataset | Add a `query` clause to filter documents before aggregating |
-
----
 
 ### Reflection
 
