@@ -1,8 +1,6 @@
 ## Task 5: Defining Mappings and Creating Custom Analyzers
 
-Mappings define how Elasticsearch stores and indexes fields. Analyzers control how
-text is broken into searchable tokens. Together, they determine what you can search
-for and how results are ranked.
+Mappings define how Elasticsearch stores and indexes fields. Analyzers control how text is broken into searchable tokens. Together, they determine what you can search for and how results are ranked.
 
 ```
         ┌──────────────── Analyzer Pipeline ─────────────────┐
@@ -28,9 +26,14 @@ for and how results are ranked.
 
 ### Prerequisite
 
-Before you begin, make sure both containers are running.
+Before you begin, make sure both containers are running. If you already created them previously, you can start them instead of creating new ones:
 
-Start **Elasticsearch**:
+```bash
+docker start elasticsearch
+docker start kibana
+```
+
+If the containers do not exist yet, create and run **Elasticsearch**:
 
 ```bash
 docker run -d \
@@ -42,7 +45,7 @@ docker run -d \
   docker.elastic.co/elasticsearch/elasticsearch:8.6.0
 ```
 
-Then start **Kibana**:
+Then create and run **Kibana**:
 
 ```bash
 docker run -d \
@@ -82,6 +85,7 @@ GET /blog/_mapping
 ```
 
 Expected output:
+
 ```json
 {
   "blog": { "mappings": { "properties": {
@@ -111,50 +115,52 @@ PUT /blog_v2
 
 Clean up: `DELETE /blog`
 
----
-
 ### Step 2 — Comparing Built-in Analyzers
 
 Run each command in **Kibana Dev Tools** and compare the tokens.
 
 **Standard** (default — lowercases, removes punctuation):
+
 ```json
 GET /_analyze
 { "analyzer": "standard", "text": "The Quick-Brown Fox's 2024 jumps!" }
 ```
+
 Expected tokens: `["the", "quick", "brown", "fox's", "2024", "jumps"]`
 
 **Simple** (splits on non-letters, lowercases — drops numbers):
+
 ```json
 GET /_analyze
 { "analyzer": "simple", "text": "The Quick-Brown Fox's 2024 jumps!" }
 ```
+
 Expected tokens: `["the", "quick", "brown", "fox", "s", "jumps"]`
 
 **Whitespace** (splits only on whitespace — no lowercasing or punctuation removal):
+
 ```json
 GET /_analyze
 { "analyzer": "whitespace", "text": "The Quick-Brown Fox's 2024 jumps!" }
 ```
+
 Expected tokens: `["The", "Quick-Brown", "Fox's", "2024", "jumps!"]`
 
 **Keyword** (no tokenization — entire input is one token):
+
 ```json
 GET /_analyze
 { "analyzer": "keyword", "text": "The Quick-Brown Fox's 2024 jumps!" }
 ```
+
 Expected tokens: `["The Quick-Brown Fox's 2024 jumps!"]`
 
 > **Takeaway:** `standard` works well for general full-text search; `keyword` is
 > best for exact-match filtering and aggregations.
 
----
-
 ### Step 3 — Multi-field Mappings
 
-A single field can be indexed multiple ways using **multi-fields**. This lets you
-run full-text queries on the root field and exact-match / aggregation queries on a
-keyword sub-field.
+A single field can be indexed multiple ways using **multi-fields**. This lets you run full-text queries on the root field and exact-match / aggregation queries on a keyword sub-field.
 
 ```json
 PUT /products
@@ -173,18 +179,21 @@ PUT /products/_doc/1
 ```
 
 **Full-text search** on the analyzed `name` field:
+
 ```json
 GET /products/_search
 { "query": { "match": { "name": "elasticsearch" } } }
 ```
 
 **Aggregation** on the keyword sub-field:
+
 ```json
 GET /products/_search
 { "size": 0, "aggs": { "categories": { "terms": { "field": "category.raw" } } } }
 ```
 
 Expected output:
+
 ```json
 { "aggregations": { "categories": { "buckets": [
   { "key": "Books & Education", "doc_count": 1 }
@@ -193,12 +202,9 @@ Expected output:
 
 Clean up: `DELETE /products`
 
----
-
 ### Step 4 — Creating a Custom Analyzer
 
-Create an index `articles` with a custom analyzer that lowercases text, removes
-English stop words, and applies Porter stemming:
+Create an index `articles` with a custom analyzer that lowercases text, removes English stop words, and applies Porter stemming:
 
 ```json
 PUT /articles
@@ -224,11 +230,10 @@ PUT /articles
 ```
 
 Expected output:
+
 ```json
 { "acknowledged": true, "shards_acknowledged": true, "index": "articles" }
 ```
-
----
 
 ### Step 5 — Testing with the _analyze API
 
@@ -243,6 +248,7 @@ GET /articles/_analyze
 ```
 
 Expected output:
+
 ```json
 { "tokens": [
   { "token": "elasticsearch", "position": 0 },
@@ -256,8 +262,6 @@ Expected output:
 > The stop filter removed *"is"* and *"a"*. The Porter stemmer reduced *"highly"* →
 > *"highli"*, *"scalable"* → *"scalabl"*, *"engine"* → *"engin"*. These stemmed
 > forms let queries like "scale" or "engines" match this document.
-
----
 
 ### Step 6 — Common Mapping Mistakes
 
@@ -276,6 +280,7 @@ Expected error:
 ```
 
 **Fix:** Create a new index with the correct mapping, then reindex:
+
 ```json
 POST /_reindex
 { "source": { "index": "articles" }, "dest": { "index": "articles_v2" } }
@@ -289,14 +294,14 @@ GET /articles/_search
 ```
 
 This errors or returns unexpected per-token buckets.
+
 **Fix:** Use the keyword sub-field: `"field": "title.raw"`.
 
 #### Mistake 3 — Custom analyzer "not found"
 
 Using `GET /_analyze` (cluster level) with an index-level custom analyzer fails.
-**Fix:** Always use `GET /<index>/_analyze` for custom analyzers.
 
----
+**Fix:** Always use `GET /<index>/_analyze` for custom analyzers.
 
 ### Step 7 — Python Script for Analyzer Testing
 
@@ -321,6 +326,7 @@ for analyzer in analyzers:
 ```
 
 Expected output:
+
 ```
 [standard]       ['elasticsearch', 'is', 'a', 'highly', 'scalable', 'search', 'engine']
 [simple]         ['elasticsearch', 'is', 'a', 'highly', 'scalable', 'search', 'engine']
@@ -331,8 +337,6 @@ Expected output:
 > `whitespace` preserves case and trailing punctuation; `custom_content` removes
 > stop words and stems the remaining tokens.
 
----
-
 ### Troubleshooting Tips
 
 | Symptom | Likely Cause | Solution |
@@ -342,8 +346,6 @@ Expected output:
 | `mapper_parsing_exception` | Field value doesn't match mapping type | Check mapping with `GET /<index>/_mapping` |
 | Cannot change field type | Fields are immutable once created | Reindex into a new index |
 | Custom analyzer not found | Querying at cluster level | Use `GET /<index>/_analyze` |
-
----
 
 ### Clean Up
 
