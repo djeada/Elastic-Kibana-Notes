@@ -1,63 +1,47 @@
 ## Distributed Index Architecture
 
-An Elasticsearch index is not stored on a single machine. It is split into smaller
-units called **shards**, and those shards are distributed across the nodes that form
-a cluster. This architecture is the foundation of Elasticsearch's ability to scale
-horizontally, tolerate hardware failures, and execute searches in parallel.
+An Elasticsearch index is not stored on a single machine. It is split into smaller units called **shards**, and those shards are distributed across the nodes that form a cluster. This architecture is the foundation of Elasticsearch's ability to scale horizontally, tolerate hardware failures, and execute searches in parallel.
 
 ```
   +-------------------+    +-------------------+    +-------------------+
   |      Node 1       |    |      Node 2       |    |      Node 3       |
-  |   (data + master) |    |     (data only)    |    |     (data only)    |
+  |   (data + master) |    |     (data only)   |    |     (data only)   |
   |                   |    |                   |    |                   |
-  |  +-----+ +-----+ |    |  +-----+ +-----+ |    |  +-----+ +-----+ |
-  |  | P0  | | R2  | |    |  | P1  | | R0  | |    |  | P2  | | R1  | |
-  |  |docs | |copy | |    |  |docs | |copy | |    |  |docs | |copy | |
-  |  |0-99 | |200+ | |    |  |100- | |0-99 | |    |  |200+ | |100- | |
-  |  +-----+ +-----+ |    |  | 199 | |     | |    |  |     | | 199 | |
-  |                   |    |  +-----+ +-----+ |    |  +-----+ +-----+ |
-  |  +-----+         |    |                   |    |                   |
-  |  | R1  |         |    |  +-----+         |    |  +-----+         |
-  |  |copy |         |    |  | R2  |         |    |  | R0  |         |
-  |  |100- |         |    |  |copy |         |    |  |copy |         |
-  |  | 199 |         |    |  |200+ |         |    |  |0-99 |         |
-  |  +-----+         |    |  +-----+         |    |  +-----+         |
+  |  +-----+ +-----+  |    |  +-----+ +-----+  |    |  +-----+ +-----+  |
+  |  | P0  | | R2  |  |    |  | P1  | | R0  |  |    |  | P2  | | R1  |  |
+  |  |docs | |copy |  |    |  |docs | |copy |  |    |  |docs | |copy |  |
+  |  |0-99 | |200+ |  |    |  |100- | |0-99 |  |    |  |200+ | |100- |  |
+  |  +-----+ +-----+  |    |  | 199 | |     |  |    |  |     | | 199 |  |
+  |                   |    |  +-----+ +-----+  |    |  +-----+ +-----+  |
+  |  +-----+          |    |                   |    |                   |
+  |  | R1  |          |    |  +-----+          |    |  +-----+          |
+  |  |copy |          |    |  | R2  |          |    |  | R0  |          |
+  |  |100- |          |    |  |copy |          |    |  |copy |          |
+  |  | 199 |          |    |  |200+ |          |    |  |0-99 |          |
+  |  +-----+          |    |  +-----+          |    |  +-----+          |
   +-------------------+    +-------------------+    +-------------------+
           |                        |                        |
           +------------------------+------------------------+
                                    |
                     +--------------+--------------+
                     |  "my_index"  (3P + 3R = 6)  |
-                    |  number_of_shards: 3         |
-                    |  number_of_replicas: 1        |
+                    |  number_of_shards: 3        |
+                    |  number_of_replicas: 1      |
                     +--------------+--------------+
 ```
 
-**Key:** P0, P1, P2 = primary shards; R0, R1, R2 = replica shards. Each primary
-shard holds a unique slice of the documents. Each replica is a full copy of its
-corresponding primary, placed on a *different* node for fault tolerance.
-
----
+**Key:** P0, P1, P2 = primary shards; R0, R1, R2 = replica shards. Each primary shard holds a unique slice of the documents. Each replica is a full copy of its corresponding primary, placed on a *different* node for fault tolerance.
 
 ### Index Shared Across Nodes
 
-In a distributed Elasticsearch cluster, an **index** is divided into **shards** to
-allow horizontal scaling and improve redundancy and performance. Each shard contains
-part of the data in the index, and the shards are distributed across multiple
-**nodes**.
+In a distributed Elasticsearch cluster, an **index** is divided into **shards** to allow horizontal scaling and improve redundancy and performance. Each shard contains part of the data in the index, and the shards are distributed across multiple **nodes**.
 
 When you create an index, you specify two key settings:
 
-- **`number_of_shards`** -- how many primary shards the index will have (set once at
-  creation time; cannot be changed without reindexing).
-- **`number_of_replicas`** -- how many replica copies of each primary shard to
-  maintain (can be changed at any time).
+- **`number_of_shards`** -- how many primary shards the index will have (set once at creation time; cannot be changed without reindexing).
+- **`number_of_replicas`** -- how many replica copies of each primary shard to maintain (can be changed at any time).
 
-The total number of shard copies in the cluster is therefore
-`number_of_shards * (1 + number_of_replicas)`. In the diagram above, with 3
-primaries and 1 replica each, there are **6 shard copies** spread across 3 nodes.
-
----
+The total number of shard copies in the cluster is therefore `number_of_shards * (1 + number_of_replicas)`. In the diagram above, with 3 primaries and 1 replica each, there are **6 shard copies** spread across 3 nodes.
 
 ### How an Index Is Split Into Shards
 
@@ -92,11 +76,7 @@ even distribution of documents across shards.
       Node 1           Node 2           Node 3
 ```
 
-Because the number of primary shards is baked into this formula, it **cannot be
-changed** after index creation without a full reindex. Choosing the right shard
-count up front is therefore critical (see *Shard Sizing Best Practices* below).
-
----
+Because the number of primary shards is baked into this formula, it **cannot be changed** after index creation without a full reindex. Choosing the right shard count up front is therefore critical (see *Shard Sizing Best Practices* below).
 
 ### Primary vs Replica Shards
 
@@ -129,32 +109,22 @@ Every shard in an Elasticsearch index is either a **primary** or a **replica**.
                                               +--------+
 ```
 
-Replica shards serve two purposes: **high availability** (data survives node loss)
-and **read throughput** (searches can be served by any copy of a shard).
-
----
+Replica shards serve two purposes: **high availability** (data survives node loss) and **read throughput** (searches can be served by any copy of a shard).
 
 ### Shard Allocation and Rebalancing
 
-The **master node** runs the **shard allocator**, which decides where each shard
-copy lives. The allocator considers several factors:
+The **master node** runs the **shard allocator**, which decides where each shard copy lives. The allocator considers several factors:
 
-1. **Allocation awareness** -- cluster-level settings such as
-   `cluster.routing.allocation.awareness.attributes` let you ensure shards spread
-   across racks or availability zones.
-2. **Disk-based thresholds** -- Elasticsearch will not allocate shards to a node
-   whose disk usage exceeds `cluster.routing.allocation.disk.watermark.low` (default
-   85%). At `high` (90%) it starts relocating shards away, and at `flood_stage`
-   (95%) it sets indices to read-only.
-3. **Shard count balance** -- the allocator tries to keep roughly the same number of
-   shards per node.
-4. **Same-shard rule** -- a replica is never placed on the same node as its primary.
-5. **Filter rules** -- you can include/exclude specific nodes for specific indices
-   using `index.routing.allocation.include/exclude/require`.
+| Rule                      | Description                                                                                                                                                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Allocation awareness**  | Cluster-level settings such as `cluster.routing.allocation.awareness.attributes` ensure shards are spread across racks or availability zones                                                                          |
+| **Disk-based thresholds** | Elasticsearch avoids allocating shards to nodes above `cluster.routing.allocation.disk.watermark.low` (85% by default); at `high` (90%) it relocates shards away; at `flood_stage` (95%) it sets indices to read-only |
+| **Shard count balance**   | The allocator tries to keep roughly the same number of shards per node                                                                                                                                                |
+| **Same-shard rule**       | A replica is never placed on the same node as its primary                                                                                                                                                             |
+| **Filter rules**          | You can include, exclude, or require specific nodes for indices using `index.routing.allocation.include`, `exclude`, and `require`                                                                                    |
 
-**Rebalancing** happens automatically when the cluster topology changes (a node
-joins, leaves, or a new index is created). The master computes the desired state and
-issues shard move commands to data nodes.
+
+**Rebalancing** happens automatically when the cluster topology changes (a node joins, leaves, or a new index is created). The master computes the desired state and issues shard move commands to data nodes.
 
 ```
   Before Rebalance (Node 4 joins)       After Rebalance
@@ -162,7 +132,7 @@ issues shard move commands to data nodes.
   Node1: P0 R2 R1                       Node1: P0 R2
   Node2: P1 R0 R2                       Node2: P1 R0
   Node3: P2 R1 R0                       Node3: P2 R1
-  Node4: (empty)                         Node4: R0 R1 R2
+  Node4: (empty)                        Node4: R0 R1 R2
                                           ^ shards migrated to balance
 ```
 
@@ -170,8 +140,6 @@ You can observe allocation decisions using:
 ```
 GET _cluster/allocation/explain
 ```
-
----
 
 ### Segment Lifecycle
 
@@ -213,21 +181,15 @@ Each Lucene shard is composed of **segments** -- immutable on-disk data structur
 
 **Lifecycle stages of a segment:**
 
-1. **In-memory buffer** -- new documents are first written to an in-memory indexing
-   buffer and the translog.
-2. **Refresh (default every 1 s)** -- the buffer is written as a new segment that is
-   *searchable* but not yet fsync'd to disk.
-3. **Flush / Commit** -- the translog is replayed and segments are fsync'd. The
-   translog is then truncated.
-4. **Merge** -- background thread combines small segments into larger ones, purging
-   deleted documents in the process.
-5. **Delete** -- source segments are removed from disk once the merge completes.
+| Stage                           | Description                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **In-memory buffer**            | New documents are first written to an in-memory indexing buffer and the translog                       |
+| **Refresh (default every 1 s)** | The buffer is written as a new segment that is **searchable** but not yet fsync’d to disk              |
+| **Flush / Commit**              | The translog is replayed and segments are fsync’d; the translog is then truncated                      |
+| **Merge**                       | A background thread combines small segments into larger ones, purging deleted documents in the process |
+| **Delete**                      | Source segments are removed from disk once the merge completes                                         |
 
-Because segments are immutable, a "delete" operation merely marks a document as
-deleted in a `.del` bitset. The document is physically removed only during the next
-merge that includes that segment.
-
----
+Because segments are immutable, a "delete" operation merely marks a document as deleted in a `.del` bitset. The document is physically removed only during the next merge that includes that segment.
 
 ### Segments and Merging (Detailed)
 
@@ -580,8 +542,6 @@ PUT /my_index/_settings
 }
 ```
 
----
-
 ### Command Reference: Shard and Index Management
 
 | Command                                          | Description                                      |
@@ -610,22 +570,4 @@ PUT /my_index/_settings
 | `POST /my_index/_shrink/my_index_shrink`         | Shrink an index into fewer primary shards         |
 | `POST _reindex`                                  | Copy documents from one index to another          |
 
-**Useful `_cat` parameters:** `?v` (headers), `?help` (column descriptions),
-`?s=column:desc` (sort), `?format=json` (JSON output).
-
----
-
-### Summary
-
-Elasticsearch's distributed index architecture rests on a few core ideas:
-
-1. **Sharding** splits data so it can live across many machines.
-2. **Replication** copies each shard so hardware failures do not lose data.
-3. **Segments** provide immutable, search-optimized storage within each shard.
-4. **Coordinated routing** ensures writes land on the correct primary and reads
-   scatter across all available copies.
-5. **Automatic allocation and rebalancing** keep the cluster healthy as nodes come
-   and go.
-
-Understanding these mechanisms is essential for capacity planning, performance
-tuning, and troubleshooting in any production Elasticsearch deployment.
+**Useful `_cat` parameters:** `?v` (headers), `?help` (column descriptions), `?s=column:desc` (sort), `?format=json` (JSON output).
