@@ -1,34 +1,33 @@
 ## Task 6: Data Ingestion with Python, Logstash, and Beats
 
 **Objectives:**
+
 - Ingest data into Elasticsearch using both Python scripts and ingestion tools.
 - Transform and enrich data during ingestion.
 - Compare feeding data manually with API calls versus using an ingestion pipeline.
 - Understand Elasticsearch ingest pipelines (ingest nodes).
 - Configure Filebeat for lightweight log shipping.
 
----
-
 ### Data Ingestion Pipeline Overview
 
 ```
-  ┌──────────────────────────────────────────────────────────────────┐
-  │                    INGESTION ARCHITECTURE                        │
-  │                                                                  │
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                    INGESTION ARCHITECTURE                       │
+  │                                                                 │
   │  ┌──────────┐    ┌──────────────┐    ┌──────────────────────┐   │
-  │  │  Sources  │    │  Ingestion   │    │   Elasticsearch      │   │
+  │  │  Sources │    │  Ingestion   │    │   Elasticsearch      │   │
   │  │          │───▶│   Layer      │───▶│                      │   │
-  │  │ CSV/JSON │    │              │    │  ┌────────────────┐  │   │
-  │  │ Log files│    │ • Python     │    │  │ Ingest Pipeline │  │   │
-  │  │ Databases│    │ • Logstash   │    │  │ (optional)      │  │   │
-  │  │ APIs     │    │ • Filebeat   │    │  └───────┬────────┘  │   │
-  │  │ Kafka    │    │ • API direct │    │          │            │   │
-  │  └──────────┘    └──────────────┘    │          ▼            │   │
+  │  │ CSV/JSON │    │              │    │  ┌─────────────────┐ │   │
+  │  │ Log files│    │ • Python     │    │  │ Ingest Pipeline │ │   │
+  │  │ Databases│    │ • Logstash   │    │  │ (optional)      │ │   │
+  │  │ APIs     │    │ • Filebeat   │    │  └───────┬─────────┘ │   │
+  │  │ Kafka    │    │ • API direct │    │          │           │   │
+  │  └──────────┘    └──────────────┘    │          ▼           │   │
   │                                      │  ┌────────────────┐  │   │
-  │                                      │  │  Index / Shard  │  │   │
+  │                                      │  │  Index / Shard │  │   │
   │                                      │  └────────────────┘  │   │
   │                                      └──────────────────────┘   │
-  └──────────────────────────────────────────────────────────────────┘
+  └─────────────────────────────────────────────────────────────────┘
 
   Data Flow Options:
   ─────────────────
@@ -39,9 +38,49 @@
   4. API + Ingest Pipeline ─── enrich ───────▶ Elasticsearch
 ```
 
----
+### Prerequisite
 
-### Task 6.1: Sample Data Preparation
+Before you begin, make sure both containers are running. If you already created them previously, you can start them instead of creating new ones:
+
+```bash
+docker start elasticsearch
+docker start kibana
+```
+
+If the containers do not exist yet, create and run **Elasticsearch**:
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+```
+
+Then create and run **Kibana**:
+
+```bash
+docker run -d \
+  --name kibana \
+  -p 5601:5601 \
+  --link elasticsearch:elasticsearch \
+  docker.elastic.co/kibana/kibana:8.6.0
+```
+
+Verify that both services are accessible:
+
+* **Elasticsearch:** `http://localhost:9200`
+* **Kibana:** `http://localhost:5601`
+
+You can confirm Elasticsearch is running by opening `http://localhost:9200` in your browser or by running:
+
+```bash
+curl http://localhost:9200
+```
+
+### Task 1: Sample Data Preparation
 
 Create a sample CSV file `products.csv`:
 
@@ -54,9 +93,7 @@ USB-C Hub,45.00,Electronics,true,7-port USB-C hub with HDMI output
 Office Chair,199.99,Furniture,true,Mesh back ergonomic office chair
 ```
 
----
-
-### Task 6.2: Data Ingestion via Python (Bulk API)
+### Task 2: Data Ingestion via Python (Bulk API)
 
 The single-document approach is slow for large datasets. Use the Bulk API instead:
 
@@ -124,15 +161,14 @@ print(f"Total documents: {resp.json()['count']}")
 ```
 
 **Expected output:**
+
 ```
 Create index: 200 - True
 Successfully indexed 5 documents in 42ms
 Total documents: 5
 ```
 
----
-
-### Task 6.3: Using Logstash with Advanced Filters
+### Task 3: Using Logstash with Advanced Filters
 
 Create a Logstash pipeline file `pipeline.conf` with multiple filters:
 
@@ -196,11 +232,13 @@ output {
 ```
 
 Run Logstash:
+
 ```bash
 bin/logstash -f pipeline.conf --config.reload.automatic
 ```
 
 **Expected console output (stdout rubydebug):**
+
 ```ruby
 {
        "clientip" => "192.168.1.50",
@@ -218,9 +256,7 @@ bin/logstash -f pipeline.conf --config.reload.automatic
 }
 ```
 
----
-
-### Task 6.4: Filebeat Configuration
+### Task 4: Filebeat Configuration
 
 Create `filebeat.yml` for lightweight log shipping:
 
@@ -273,20 +309,20 @@ logging.files:
 ```
 
 Start Filebeat:
+
 ```bash
 sudo filebeat -e -c filebeat.yml
 ```
 
 **Expected output:**
+
 ```
 INFO  [input]      log/input.go:152   Configured paths: [/var/log/apache2/access.log]
 INFO  [publisher]  pipeline/output.go:105  Connection to backoff(elasticsearch(http://localhost:9200)) established
 INFO  Harvester started for file: /var/log/apache2/access.log
 ```
 
----
-
-### Task 6.5: Elasticsearch Ingest Pipelines
+### Task 5: Elasticsearch Ingest Pipelines
 
 Elasticsearch can transform documents at index time without Logstash:
 
@@ -317,6 +353,7 @@ PUT /_ingest/pipeline/enrich-products
 ```
 
 Test the pipeline:
+
 ```json
 POST /_ingest/pipeline/enrich-products/_simulate
 {
@@ -327,6 +364,7 @@ POST /_ingest/pipeline/enrich-products/_simulate
 ```
 
 **Expected output:**
+
 ```json
 {
   "docs": [
@@ -346,6 +384,7 @@ POST /_ingest/pipeline/enrich-products/_simulate
 ```
 
 Use the pipeline when indexing:
+
 ```json
 POST /products/_doc?pipeline=enrich-products
 {
@@ -355,9 +394,7 @@ POST /products/_doc?pipeline=enrich-products
 }
 ```
 
----
-
-### Task 6.6: Comparing Ingestion Methods
+### Task 6: Comparing Ingestion Methods
 
 | Feature             | Python Script       | Logstash             | Filebeat            | Ingest Pipeline     |
 |---------------------|---------------------|----------------------|---------------------|---------------------|
@@ -370,27 +407,25 @@ POST /products/_doc?pipeline=enrich-products
 | **Backpressure**    | Manual              | Automatic            | Automatic           | Automatic           |
 
 **When to use each:**
+
 - **Python**: One-time data migration, custom business logic, integration with existing Python apps.
 - **Logstash**: Complex parsing (grok), multiple inputs/outputs, enrichment with external lookups.
 - **Filebeat**: Lightweight log collection from many servers, when you need low resource footprint.
 - **Ingest Pipeline**: Simple field-level transforms, when you want to keep the pipeline inside Elasticsearch.
 
----
-
 ### Troubleshooting Tips
 
-- **Bulk API returns errors for some docs**: Check the `items` array in the response — each item has its own status.
-- **Logstash "connection refused"**: Verify Elasticsearch is running and the `hosts` setting is correct.
-- **Filebeat "harvester" not starting**: Check file permissions and ensure the paths exist.
-- **Grok parse failure**: Use the Kibana Grok Debugger (Dev Tools → Grok Debugger) to test patterns.
-- **Ingest pipeline "processor failed"**: Use `_simulate` API to debug before applying to live data.
-- **Slow bulk ingestion**: Increase batch size, reduce replica count during import (`"number_of_replicas": 0`), and increase `refresh_interval`.
-
----
+* When a *bulk API* request returns partial failures, checking the `items` array is helpful because each document has its own status and error details, while skipping that review can hide which documents failed; for example, one item may return `201 created` while another returns `400 mapper_parsing_exception`.
+* If *Logstash* shows “connection refused,” verifying that Elasticsearch is running and confirming the `hosts` setting is correct is useful because the pipeline can reconnect once the endpoint is reachable, while omitting this check often leaves data stuck in the output stage; for example, `hosts => ["http://localhost:9200"]` will fail if Elasticsearch is stopped or listening on another port.
+* When a *harvester* in Filebeat does not start, checking file permissions and confirming the configured paths exist is beneficial because Filebeat can begin reading files immediately once access is available, while missing permissions or invalid paths prevent collection entirely; for example, a log file owned by `root` may not be readable by the Filebeat service user.
+* Before changing a grok pattern, using the *Grok* Debugger in Kibana is helpful because it shows whether the pattern matches sample input and which fields are extracted, while applying an untested pattern can produce repeated parse failures; for example, testing `%{IP:client}` against an Apache log line confirms whether the client IP is captured correctly.
+* If an ingest pipeline reports “processor failed,” using the *_simulate* API is useful because it lets you test documents safely before applying changes to live traffic, while skipping simulation can make debugging harder after errors reach production; for example, `_ingest/pipeline/_simulate` can reveal which processor fails on a sample JSON payload.
+* During *bulk ingestion*, increasing batch size, setting `"number_of_replicas": 0` temporarily, and raising `refresh_interval` is beneficial because indexing throughput usually improves when Elasticsearch performs fewer background operations, while leaving default settings can slow imports noticeably; for example, disabling replicas during a one-time migration often reduces indexing time and replicas can be restored afterward.
 
 ### Reflection
 
 Compare results from Python ingestion versus Logstash/Filebeat pipelines:
+
 1. Which method was easiest to set up for your use case?
 2. When would you combine methods (e.g., Filebeat → Logstash → Elasticsearch)?
 3. How does the ingest pipeline compare to Logstash for simple transformations?
