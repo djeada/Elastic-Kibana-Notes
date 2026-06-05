@@ -8,7 +8,7 @@ The following diagram illustrates how a typical API request travels from the cli
 
 ```
                           Elasticsearch Cluster
-                   ┌─────────────────────────────────┐
+                   ┌──────────────────────────────────┐
                    │                                  │
   ┌────────┐       │  ┌─────────────┐                 │
   │        │  HTTP │  │ Coordinating│   ┌───────────┐ │
@@ -22,18 +22,20 @@ The following diagram illustrates how a typical API request travels from the cli
                    │         │                        │
                    │         │          ┌───────────┐ │
                    │         └─────────►│ Data Node │ │
-                   │                    │  (Replica) │ │
+                   │                    │ (Replica) │ │
                    │                    └───────────┘ │
-                   └─────────────────────────────────┘
+                   └──────────────────────────────────┘
 
-  1. Client sends HTTP request (GET, PUT, POST, DELETE)
-  2. Coordinating node receives and parses the request
-  3. Request is routed to the appropriate data node(s)
-  4. Data nodes execute the operation on local shards
-  5. Results are gathered back at the coordinating node
-  6. Coordinating node merges results and sends HTTP response
+
 ```
 
+1. Client sends HTTP request (GET, PUT, POST, DELETE)
+2. Coordinating node receives and parses the request
+3. Request is routed to the appropriate data node(s)
+4. Data nodes execute the operation on local shards
+5. Results are gathered back at the coordinating node
+6. Coordinating node merges results and sends HTTP response
+     
 ### HTTP Methods Overview
 
 Elasticsearch maps standard HTTP methods to CRUD operations:
