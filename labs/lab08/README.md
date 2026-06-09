@@ -1,6 +1,7 @@
 ## Task 8: Advanced Querying and Query Profiling
 
 **Objectives:**
+
 - Build complex queries combining multiple query types (function score, boosts, filters).
 - Use the `profile` flag to analyze query performance.
 - Leverage Python to iterate and refine queries based on performance data.
@@ -8,43 +9,41 @@
 - Configure search slow logs to catch performance issues.
 - Apply query optimization techniques.
 
----
-
 ### Query Profiling Breakdown
 
 When `"profile": true` is enabled, Elasticsearch reports timing for each query phase:
 
 ```
   ┌────────────────────────────────────────────────────────┐
-  │              QUERY PROFILING PHASES                     │
+  │              QUERY PROFILING PHASES                    │
   │                                                        │
   │  ┌─────────────┐                                       │
-  │  │  rewrite     │  Simplify/optimize the query tree    │
+  │  │  rewrite    │  Simplify/optimize the query tree     │
   │  └──────┬──────┘                                       │
   │         │                                              │
   │         ▼                                              │
-  │  ┌──────────────┐                                      │
+  │  ┌───────────────┐                                     │
   │  │ create_weight │  Build internal data structures     │
-  │  └──────┬───────┘   for scoring                        │
+  │  └──────┬────────┘   for scoring                       │
   │         │                                              │
   │         ▼                                              │
   │  ┌──────────────┐                                      │
-  │  │ build_scorer  │  Create scorer iterators for        │
+  │  │ build_scorer │  Create scorer iterators for         │
   │  └──────┬───────┘   each segment                       │
   │         │                                              │
   │         ▼                                              │
   │  ┌──────────────┐                                      │
-  │  │ next_doc      │  Advance to next matching document  │
+  │  │ next_doc     │  Advance to next matching document   │
   │  └──────┬───────┘                                      │
   │         │                                              │
   │         ▼                                              │
   │  ┌──────────────┐                                      │
-  │  │   score       │  Calculate relevance score for      │
+  │  │   score      │   Calculate relevance score for      │
   │  └──────┬───────┘   each matching document             │
   │         │                                              │
   │         ▼                                              │
   │  ┌──────────────┐                                      │
-  │  │   advance     │  Skip to a target document ID       │
+  │  │   advance    │  Skip to a target document ID        │
   │  └──────┬───────┘   (used by conjunctions)             │
   │         │                                              │
   │         ▼                                              │
@@ -52,9 +51,49 @@ When `"profile": true` is enabled, Elasticsearch reports timing for each query p
   └────────────────────────────────────────────────────────┘
 ```
 
----
+### Prerequisite
 
-### Task 8.1: Complex Query Construction (Kibana)
+Before you begin, make sure both containers are running. If you already created them previously, you can start them instead of creating new ones:
+
+```bash
+docker start elasticsearch
+docker start kibana
+```
+
+If the containers do not exist yet, create and run **Elasticsearch**:
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+```
+
+Then create and run **Kibana**:
+
+```bash
+docker run -d \
+  --name kibana \
+  -p 5601:5601 \
+  --link elasticsearch:elasticsearch \
+  docker.elastic.co/kibana/kibana:8.6.0
+```
+
+Verify that both services are accessible:
+
+* **Elasticsearch:** `http://localhost:9200`
+* **Kibana:** `http://localhost:5601`
+
+You can confirm Elasticsearch is running by opening `http://localhost:9200` in your browser or by running:
+
+```bash
+curl http://localhost:9200
+```
+
+### Task 1: Complex Query Construction (Kibana)
 
 #### Nested Bool Query with Multiple Clauses
 
@@ -87,6 +126,7 @@ GET /products/_search
 ```
 
 **Expected output:**
+
 ```json
 {
   "took": 5,
@@ -177,9 +217,7 @@ GET /products/_search
 }
 ```
 
----
-
-### Task 8.2: Query Profiling — Detailed Analysis
+### Task 2: Query Profiling — Detailed Analysis
 
 Enable the profiler on the bool query:
 
@@ -197,6 +235,7 @@ GET /products/_search
 ```
 
 **Expected profile output (simplified):**
+
 ```json
 {
   "profile": {
@@ -274,9 +313,7 @@ GET /products/_search
 
 > **Tip:** If `score` dominates, consider using `filter` context (no scoring) for non-relevance clauses. If `next_doc` dominates, the query is matching too many documents.
 
----
-
-### Task 8.3: Search Slow Logs
+### Task 3: Search Slow Logs
 
 Configure Elasticsearch to log slow queries. This helps catch performance problems in production:
 
@@ -305,11 +342,9 @@ Slow log entries appear in `<ES_HOME>/logs/<cluster_name>_index_search_slowlog.l
   source[{"query":{"match_all":{}}}]
 ```
 
----
+### Task 4: Query Optimization Techniques
 
-### Task 8.4: Query Optimization Techniques
-
-#### 1. Use `filter` Context for Non-Scoring Clauses
+#### Use `filter` Context for Non-Scoring Clauses
 
 Filters are cached and skip scoring — much faster:
 
@@ -321,7 +356,7 @@ Filters are cached and skip scoring — much faster:
 { "filter": [{ "range": { "price": { "gte": 10 } } }] }
 ```
 
-#### 2. Avoid Wildcards at the Start of a Pattern
+#### Avoid Wildcards at the Start of a Pattern
 
 ```json
 // SLOW: leading wildcard scans all terms
@@ -331,7 +366,7 @@ Filters are cached and skip scoring — much faster:
 { "match_phrase_prefix": { "name": "elastic" } }
 ```
 
-#### 3. Limit Returned Fields with `_source`
+#### Limit Returned Fields with `_source`
 
 ```json
 {
@@ -341,7 +376,7 @@ Filters are cached and skip scoring — much faster:
 }
 ```
 
-#### 4. Use `terminate_after` for Existence Checks
+#### Use `terminate_after` for Existence Checks
 
 ```json
 {
@@ -351,7 +386,7 @@ Filters are cached and skip scoring — much faster:
 }
 ```
 
-#### 5. Prefer `keyword` Over `text` for Exact Matches
+#### Prefer `keyword` Over `text` for Exact Matches
 
 ```json
 // SLOW: analyzed text field
@@ -361,9 +396,7 @@ Filters are cached and skip scoring — much faster:
 { "term": { "status": "published" } }
 ```
 
----
-
-### Task 8.5: Python Query Benchmarking Script
+### Task 5: Python Query Benchmarking Script
 
 ```python
 import requests
@@ -450,6 +483,7 @@ for shard in resp.get("profile", {}).get("shards", []):
 ```
 
 **Expected output:**
+
 ```
 Query                     Avg (ms)     Median (ms)  Min (ms)   Max (ms)   Hits
 -----------------------------------------------------------------------------
@@ -469,8 +503,6 @@ script_score              6.15         5.40         3.10       15.80      5
     score                    0.28 ms  ( 22.4%)
 ```
 
----
-
 ### Troubleshooting Tips
 
 - **Profile output too large**: Profile only targets one index at a time; use `routing` to limit shards.
@@ -479,12 +511,10 @@ script_score              6.15         5.40         3.10       15.80      5
 - **"too_many_clauses" error**: Boolean query has too many terms — use `terms` query instead of many `term` clauses.
 - **Slow aggregation queries**: Ensure aggregated fields use `keyword` or numeric types, not `text`.
 
----
-
 ### Reflection
 
 Record which components of your query are most time-consuming and answer:
+
 1. Which profiling phase dominates in your queries? What does that imply?
 2. How much faster is `bool` with `filter` vs `must` for the range clause?
 3. What is the performance trade-off between `function_score` and `script_score`?
-
