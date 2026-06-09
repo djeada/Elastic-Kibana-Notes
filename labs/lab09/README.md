@@ -10,8 +10,6 @@
 - Compare the tradeoffs of object, nested, and parent-child approaches.
 - Query nested data programmatically with Python.
 
----
-
 ### How Elasticsearch Stores Relational Data
 
 Elasticsearch is **not** a relational database — it has no JOIN across indices.
@@ -21,8 +19,8 @@ Instead it offers three strategies for relationships inside a single index:
 ┌────────────────────────────────────────────────────────────────┐
 │  FLAT OBJECT (default)                                         │
 │  One Lucene doc. Arrays flattened into multi-value fields:     │
-│    reviews.user → ["alice","bob"]  reviews.stars → [5, 2]     │
-│  ⚠ Cross-object matches possible (alice + 2 stars matches!)   │
+│    reviews.user → ["alice","bob"]  reviews.stars → [5, 2]      │
+│  ⚠ Cross-object matches possible (alice + 2 stars matches!)    │
 ├────────────────────────────────────────────────────────────────┤
 │  NESTED OBJECT                                                 │
 │  Each nested object → hidden separate Lucene doc:              │
@@ -40,17 +38,51 @@ Instead it offers three strategies for relationships inside a single index:
 └────────────────────────────────────────────────────────────────┘
 ```
 
----
+### Prerequisite
+
+Before you begin, make sure both containers are running. If you already created them previously, you can start them instead of creating new ones:
+
+```bash
+docker start elasticsearch
+docker start kibana
+```
+
+If the containers do not exist yet, create and run **Elasticsearch**:
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+```
+
+Then create and run **Kibana**:
+
+```bash
+docker run -d \
+  --name kibana \
+  -p 5601:5601 \
+  --link elasticsearch:elasticsearch \
+  docker.elastic.co/kibana/kibana:8.6.0
+```
+
+Verify that both services are accessible:
+
+* **Elasticsearch:** `http://localhost:9200`
+* **Kibana:** `http://localhost:5601`
+
+You can confirm Elasticsearch is running by opening `http://localhost:9200` in your browser or by running:
+
+```bash
+curl http://localhost:9200
+```
 
 ### Why Relational Data Modeling Matters
 
-Choosing the wrong strategy leads to **incorrect results** (flat objects match
-across array boundaries), **expensive reindexing** (nested requires reindexing
-the parent on child update), or **wasted memory** (parent-child uses an
-in-memory global ordinals map). Understanding each approach helps you pick the
-right one.
-
----
+Choosing the wrong strategy leads to **incorrect results** (flat objects match across array boundaries), **expensive reindexing** (nested requires reindexing the parent on child update), or **wasted memory** (parent-child uses an in-memory global ordinals map). Understanding each approach helps you pick the right one.
 
 ### Lab Steps
 
@@ -99,8 +131,6 @@ GET /products/_search
 > Alice gave 5 stars, not 2. Elasticsearch stored `reviews.user: ["alice","bob"]`
 > and `reviews.stars: [5,2]` as independent arrays, so the query matched across
 > object boundaries.
-
----
 
 #### Step 2 — Nested Type: Solving the Flattening Problem
 
@@ -160,12 +190,9 @@ GET /products_nested/_search
 ]}}
 ```
 
----
-
 #### Step 3 — inner_hits: Retrieving Matching Nested Objects
 
-By default a nested query returns the full parent. Add `inner_hits` to see
-**which** nested objects matched:
+By default a nested query returns the full parent. Add `inner_hits` to see **which** nested objects matched:
 
 ```json
 GET /products_nested/_search
@@ -193,12 +220,9 @@ GET /products_nested/_search
 > Only alice's review (offset 0) appears — bob's 2-star review does not
 > satisfy `gte: 4`.
 
----
-
 #### Step 4 — Parent-Child Relationships with the Join Field
 
-Use parent-child when children are updated frequently and you want to avoid
-reindexing the parent.
+Use parent-child when children are updated frequently and you want to avoid reindexing the parent.
 
 ```json
 PUT /library
@@ -235,8 +259,6 @@ POST /library/_doc/201?routing=2
   "my_join_field": { "name": "book", "parent": "2" } }
 ```
 
----
-
 #### Step 5 — has_child Query (Find Parents by Their Children)
 
 Find authors who wrote a dystopian book:
@@ -257,8 +279,6 @@ GET /library/_search
     { "_id": "2", "_source": { "name": "Aldous Huxley" } }
 ]}}
 ```
-
----
 
 #### Step 6 — has_parent Query (Find Children by Their Parent)
 
@@ -281,8 +301,6 @@ GET /library/_search
 ]}}
 ```
 
----
-
 ### Comparison Table: Object vs Nested vs Parent-Child
 
 | Criteria           | Object (default)       | Nested                       | Parent-Child (Join)          |
@@ -293,8 +311,6 @@ GET /library/_search
 | **Update cost**    | Reindex entire doc     | Reindex entire doc           | Update child independently ✔ |
 | **Memory**         | Low                    | Low                          | Higher (ordinals in heap)    |
 | **Best for**       | Rarely queried objects | Small, rarely updated arrays | Frequently updated children  |
-
----
 
 ### Python Script: Querying Nested Data
 
@@ -332,8 +348,6 @@ Product: Wireless Mouse
   ★ 5 by alice — "Excellent build quality"
 ```
 
----
-
 ### Troubleshooting Tips
 
 | Symptom | Cause | Fix |
@@ -344,8 +358,6 @@ Product: Wireless Mouse
 | Slow parent-child queries | Global ordinals rebuilt each refresh | Set `"eager_global_ordinals": true` on join field |
 | `mapper_parsing_exception` | Wrong join field format in child doc | Use `{ "name": "<child>", "parent": "<id>" }` |
 
----
-
 ### Cleanup
 
 ```json
@@ -355,8 +367,6 @@ DELETE /library
 ```
 
 **Expected output (each):** `{ "acknowledged": true }`
-
----
 
 ### Reflection
 
