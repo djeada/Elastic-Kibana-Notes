@@ -34,7 +34,49 @@
   └─────────────────────────────────────────────────────────────┘
 ```
 
-### Task 7.1: Multi-Node Setup with Docker Compose
+### Prerequisite
+
+Before you begin, make sure both containers are running. If you already created them previously, you can start them instead of creating new ones:
+
+```bash
+docker start elasticsearch
+docker start kibana
+```
+
+If the containers do not exist yet, create and run **Elasticsearch**:
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+```
+
+Then create and run **Kibana**:
+
+```bash
+docker run -d \
+  --name kibana \
+  -p 5601:5601 \
+  --link elasticsearch:elasticsearch \
+  docker.elastic.co/kibana/kibana:8.6.0
+```
+
+Verify that both services are accessible:
+
+* **Elasticsearch:** `http://localhost:9200`
+* **Kibana:** `http://localhost:5601`
+
+You can confirm Elasticsearch is running by opening `http://localhost:9200` in your browser or by running:
+
+```bash
+curl http://localhost:9200
+```
+
+### Task 1: Multi-Node Setup with Docker Compose
 
 Create a `docker-compose.yml` with resource limits and persistent volumes:
 
@@ -147,6 +189,7 @@ docker-compose up -d
 ```
 
 **Expected output:**
+
 ```
 Creating network "lab07_es_net" with driver "bridge"
 Creating volume "lab07_es1_data" with local driver
@@ -158,11 +201,12 @@ Creating es3 ... done
 ```
 
 Wait ~30 seconds for the cluster to form, then verify:
+
 ```bash
 curl -s http://localhost:9200/_cluster/health?pretty
 ```
 
-### Task 7.2: Node Roles Configuration
+### Task 2: Node Roles Configuration
 
 Elasticsearch nodes can have different roles. Here's a summary:
 
@@ -188,18 +232,18 @@ In production, dedicate roles:
 - node.roles=
 ```
 
----
-
-### Task 7.3: Cluster Monitoring with Cat APIs
+### Task 3: Cluster Monitoring with Cat APIs
 
 The `_cat` APIs return human-readable tabular output:
 
 #### Cluster Health
+
 ```
 GET /_cluster/health?pretty
 ```
 
 **Expected output:**
+
 ```json
 {
   "cluster_name": "es_cluster",
@@ -221,11 +265,13 @@ GET /_cluster/health?pretty
 > **Status meanings:** `green` = all shards assigned, `yellow` = primary shards ok but replicas unassigned, `red` = some primary shards unassigned.
 
 #### List Nodes
+
 ```
 GET /_cat/nodes?v&h=name,ip,role,master,heap.percent,disk.used_percent,cpu
 ```
 
 **Expected output:**
+
 ```
 name  ip          role    master  heap.percent  disk.used_percent  cpu
 es1   172.18.0.2  dm      *       45            32                  5
@@ -236,11 +282,13 @@ es3   172.18.0.4  di      -       42            30                  8
 > Roles: `d` = data, `m` = master, `i` = ingest. `*` = current elected master.
 
 #### List Shards
+
 ```
 GET /_cat/shards?v&h=index,shard,prirep,state,docs,store,node
 ```
 
 **Expected output:**
+
 ```
 index     shard  prirep  state    docs  store    node
 products  0      p       STARTED  1000  1.2mb    es1
@@ -252,11 +300,13 @@ products  2      r       STARTED  1020  1.3mb    es1
 ```
 
 #### Disk Allocation
+
 ```
 GET /_cat/allocation?v
 ```
 
 **Expected output:**
+
 ```
 shards  disk.indices  disk.used  disk.avail  disk.total  disk.percent  host         ip           node
 4       2.5mb         15.2gb     44.8gb      60gb        25            172.18.0.2   172.18.0.2   es1
@@ -264,9 +314,7 @@ shards  disk.indices  disk.used  disk.avail  disk.total  disk.percent  host     
 4       2.4mb         15.0gb     45.0gb      60gb        25            172.18.0.4   172.18.0.4   es3
 ```
 
----
-
-### Task 7.4: Shard Allocation Awareness
+### Task 4: Shard Allocation Awareness
 
 Force Elasticsearch to distribute replicas across availability zones:
 
@@ -280,6 +328,7 @@ PUT /_cluster/settings
 ```
 
 Then tag each node (in `elasticsearch.yml` or docker environment):
+
 ```yaml
 # es1 and es2 in zone-a
 - node.attr.zone=zone-a
@@ -291,6 +340,7 @@ Then tag each node (in `elasticsearch.yml` or docker environment):
 This ensures a primary and its replica are never on nodes in the same zone.
 
 Create an index with awareness in mind:
+
 ```json
 PUT /zone_aware_index
 {
@@ -302,13 +352,12 @@ PUT /zone_aware_index
 ```
 
 **Expected output:**
+
 ```json
 { "acknowledged": true, "shards_acknowledged": true, "index": "zone_aware_index" }
 ```
 
----
-
-### Task 7.5: Python Monitoring Script
+### Task 5: Python Monitoring Script
 
 A comprehensive monitoring script that outputs formatted cluster stats:
 
@@ -375,6 +424,7 @@ if __name__ == "__main__":
 ```
 
 **Expected output:**
+
 ```
 =================================================================
   CLUSTER MONITOR — 2024-01-15 14:30:00
@@ -392,8 +442,6 @@ if __name__ == "__main__":
   es3        42       8        15360        MB 45240        MB
 ```
 
----
-
 ### Troubleshooting Tips
 
 - **Cluster status YELLOW**: Replicas cannot be assigned — usually because you have only 1 node. Add more nodes or set `number_of_replicas: 0`.
@@ -408,11 +456,10 @@ if __name__ == "__main__":
 GET /_cluster/allocation/explain?pretty
 ```
 
----
-
 ### Reflection
 
 Discuss how shard allocation, nodes, and replica settings enhance reliability:
+
 1. What happens if `es2` goes down? Does the cluster remain green?
 2. How does shard allocation awareness prevent data loss in a zone failure?
 3. What is the trade-off between more replicas and indexing performance?
