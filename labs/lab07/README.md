@@ -34,48 +34,6 @@
   └─────────────────────────────────────────────────────────────┘
 ```
 
-### Prerequisite
-
-Before you begin, make sure both containers are running. If you already created them previously, you can start them instead of creating new ones:
-
-```bash
-docker start elasticsearch
-docker start kibana
-```
-
-If the containers do not exist yet, create and run **Elasticsearch**:
-
-```bash
-docker run -d \
-  --name elasticsearch \
-  -p 9200:9200 \
-  -e "discovery.type=single-node" \
-  -e "xpack.security.enabled=false" \
-  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
-  docker.elastic.co/elasticsearch/elasticsearch:8.6.0
-```
-
-Then create and run **Kibana**:
-
-```bash
-docker run -d \
-  --name kibana \
-  -p 5601:5601 \
-  --link elasticsearch:elasticsearch \
-  docker.elastic.co/kibana/kibana:8.6.0
-```
-
-Verify that both services are accessible:
-
-* **Elasticsearch:** `http://localhost:9200`
-* **Kibana:** `http://localhost:5601`
-
-You can confirm Elasticsearch is running by opening `http://localhost:9200` in your browser or by running:
-
-```bash
-curl http://localhost:9200
-```
-
 ### Task 1: Multi-Node Setup with Docker Compose
 
 Create a `docker-compose.yml` with resource limits and persistent volumes:
