@@ -1865,16 +1865,15 @@ curl "http://localhost:9200/filebeat-app-*/_count?pretty"
 
 ### Compare Ingestion Methods
 
-| Feature              | Python Script                            | Logstash                              | Filebeat                         | Ingest Pipeline                |
-| -- | - | - | -- |  |
-| Complexity           | Low to medium                            | Medium                                | Low                              | Low                            |
-| Main purpose         | Custom ingestion and migration           | Parsing and ETL                       | Lightweight log shipping         | Index-time enrichment          |
-| Transformation power | Full Python logic                        | Rich plugin ecosystem                 | Limited processors               | Moderate processors            |
-| Resource usage       | Low                                      | Higher, JVM-based                     | Very low                         | Runs inside Elasticsearch      |
-| Throughput           | Good with Bulk API                       | High                                  | High                             | High, but uses ingest node CPU |
-| Buffering            | Must be implemented or handled by client | Built in                              | Built in                         | None by itself                 |
-| Best use case        | CSV, API, or database migration          | Complex logs and multi-step pipelines | Shipping logs from many machines | Simple field enrichment        |
-
+| Feature              | Python Script                     | Logstash                              | Filebeat                         | Ingest Pipeline                |
+| -------------------- | --------------------------------- | ------------------------------------- | -------------------------------- | ------------------------------ |
+| Complexity           | Low to Medium                     | Medium                                | Low                              | Low                            |
+| Main Purpose         | Custom ingestion and migration    | Parsing and ETL                       | Lightweight log shipping         | Index-time enrichment          |
+| Transformation Power | Full Python logic                 | Rich plugin ecosystem                 | Limited processors               | Moderate processors            |
+| Resource Usage       | Low                               | Higher (JVM-based)                    | Very low                         | Runs inside Elasticsearch      |
+| Throughput           | Good with Bulk API                | High                                  | High                             | High, but uses ingest node CPU |
+| Buffering            | Must be implemented by the client | Built-in                              | Built-in                         | None by itself                 |
+| Best Use Case        | CSV, API, or database migration   | Complex logs and multi-step pipelines | Shipping logs from many machines | Simple field enrichment        |
 
 ### When to Use Each Method
 
