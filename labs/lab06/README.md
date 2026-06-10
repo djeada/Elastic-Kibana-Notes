@@ -4,17 +4,21 @@
 
 By the end of this lab, you will be able to:
 
-- Start a complete Elastic Stack lab with Docker Compose.
-- Generate sample product data with Python.
-- Ingest CSV data into Elasticsearch using the Bulk API.
-- Use an Elasticsearch ingest pipeline to enrich product documents at index time.
-- Generate continuous Apache-style and JSON application logs at a controlled rate.
-- Ingest Apache access logs through Logstash.
-- Ingest JSON application logs through Filebeat.
-- Verify indexed data from the command line and in Kibana.
-- Compare Python ingestion, Logstash, Filebeat, and ingest pipelines.
+* Start a basic Elastic Stack lab using plain Docker containers.
+* Generate sample product data with Python.
+* Ingest CSV data into Elasticsearch using the Bulk API.
+* Use an Elasticsearch ingest pipeline to enrich product documents at index time.
+* Generate continuous Apache-style and JSON application logs at a controlled rate.
+* Add Logstash only when Apache log parsing is needed.
+* Ingest Apache access logs through Logstash.
+* Add Filebeat only when JSON log shipping is needed.
+* Ingest JSON application logs through Filebeat.
+* Verify indexed data from the command line and in Kibana.
+* Compare Python ingestion, Logstash, Filebeat, and Elasticsearch ingest pipelines.
 
 ## Data Ingestion Pipeline Overview
+
+This lab is organized in stages. Each ingestion method is introduced only when it is needed.
 
 ```text
   ┌───────────────────────────────────────────────────────────────────────────────┐
@@ -39,240 +43,181 @@ By the end of this lab, you will be able to:
   └──────────┘     └─────────────────┘     └──────────────────────┘
 ```
 
-## Prerequisite: Create the Lab Project and Start the Stack
+## Prerequisites
 
-Before the six tasks, create a small project folder. The Markdown remains one file, but the lab itself is easier to run when each embedded code block is copied into its matching file.
+In the prerequisites, only prepare the base lab environment.
 
-### Project structure
+You will do the following:
+
+1. Create the project directory structure.
+2. Create basic configuration files.
+3. Create the Python environment.
+4. Create a Docker network.
+5. Start Elasticsearch.
+6. Start Kibana.
+7. Verify that Elasticsearch and Kibana are reachable.
+
+### Project Structure at the Start
+
+At the beginning of the lab, the project should look like this:
 
 ```text
-task6-ingestion-lab/
+ingestion-lab/
 ├── .env
-├── docker-compose.yml
 ├── requirements.txt
-├── Makefile
 ├── data/
 │   └── logs/
 │       └── app/
-├── filebeat/
-│   └── filebeat.yml
-├── logstash/
-│   └── pipeline/
-│       └── pipeline.conf
 └── scripts/
-    ├── wait_for_elasticsearch.py
-    ├── prepare_products.py
-    ├── setup_elastic_assets.py
-    ├── ingest_products_bulk.py
-    ├── generate_logs.py
-    └── check_results.py
+    └── wait_for_elasticsearch.py
 ```
 
-Create the folders:
+### Create the Project Folder
 
 ```bash
-mkdir -p task6-ingestion-lab/{scripts,logstash/pipeline,filebeat,data/logs/app}
-cd task6-ingestion-lab
+mkdir -p ingestion-lab/{scripts,data/logs/app}
+cd ingestion-lab
 ```
 
 ### Create `.env`
 
-```dotenv
+The `.env` file stores simple version and port settings used by the Docker commands.
+
+```bash
+cat > .env <<'EOF'
 ELASTIC_VERSION=8.6.0
 ES_PORT=9200
 KIBANA_PORT=5601
+EOF
 ```
+
+Load the variables into your current shell:
+
+```bash
+source .env
+```
+
+You need to run `source .env` again if you open a new terminal.
 
 ### Create `requirements.txt`
 
-```txt
+```bash
+cat > requirements.txt <<'EOF'
 requests>=2.31.0
 python-dateutil>=2.9.0
+EOF
 ```
 
-### Create `docker-compose.yml`
+### Create and Activate a Python Virtual Environment
 
-This Compose file runs all external services used by the lab: Elasticsearch, Kibana, Logstash, and Filebeat.
-
-```yaml
-services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-8.6.0}
-    container_name: task6-elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
-    ports:
-      - "${ES_PORT:-9200}:9200"
-    volumes:
-      - esdata:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION:-8.6.0}
-    container_name: task6-kibana
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-    ports:
-      - "${KIBANA_PORT:-5601}:5601"
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION:-8.6.0}
-    container_name: task6-logstash
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    volumes:
-      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
-      - ./data/logs:/usr/share/logstash/sample:ro
-      - logstashdata:/usr/share/logstash/data
-    environment:
-      - LS_JAVA_OPTS=-Xms256m -Xmx256m
-    ports:
-      - "5044:5044"
-
-  filebeat:
-    image: docker.elastic.co/beats/filebeat:${ELASTIC_VERSION:-8.6.0}
-    container_name: task6-filebeat
-    user: root
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    command: ["filebeat", "-e", "--strict.perms=false"]
-    volumes:
-      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - ./data/logs:/logs:ro
-      - filebeatdata:/usr/share/filebeat/data
-
-volumes:
-  esdata:
-  logstashdata:
-  filebeatdata:
-```
-
-### Create `Makefile`
-
-The Makefile is optional, but it gives short commands for the lab steps.
-
-```makefile
-PYTHON ?= python3
-ES_URL ?= http://localhost:9200
-
-.PHONY: start stop clean setup data ingest logs check tail-logstash tail-filebeat
-
-start:
-	docker compose up -d
-	$(PYTHON) scripts/wait_for_elasticsearch.py --es-url $(ES_URL)
-
-setup:
-	$(PYTHON) scripts/setup_elastic_assets.py --es-url $(ES_URL) --reset
-
-data:
-	$(PYTHON) scripts/prepare_products.py --rows 100 --output data/products.csv
-
-ingest: data setup
-	$(PYTHON) scripts/ingest_products_bulk.py --es-url $(ES_URL) --csv data/products.csv --pipeline enrich-products
-
-logs:
-	$(PYTHON) scripts/generate_logs.py --rate 10
-
-check:
-	$(PYTHON) scripts/check_results.py --es-url $(ES_URL)
-
-tail-logstash:
-	docker logs -f task6-logstash
-
-tail-filebeat:
-	docker logs -f task6-filebeat
-
-stop:
-	docker compose down
-
-clean:
-	docker compose down -v
-	rm -rf data/products.csv data/logs/access.log data/logs/app/*.log
-```
-
-### Create `scripts/wait_for_elasticsearch.py`
-
-This helper waits until Elasticsearch is actually reachable before other setup scripts run.
-
-```python
-#!/usr/bin/env python3
-"""Wait until Elasticsearch is reachable."""
-import argparse
-import sys
-import time
-import requests
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--es-url", default="http://localhost:9200")
-    parser.add_argument("--timeout", type=int, default=120)
-    args = parser.parse_args()
-
-    deadline = time.time() + args.timeout
-    last_error = None
-    while time.time() < deadline:
-        try:
-            response = requests.get(args.es_url, timeout=3)
-            if response.ok:
-                cluster = response.json().get("cluster_name", "unknown")
-                print(f"Elasticsearch is ready at {args.es_url} (cluster={cluster})")
-                return 0
-            last_error = f"HTTP {response.status_code}: {response.text[:200]}"
-        except requests.RequestException as exc:
-            last_error = str(exc)
-        time.sleep(2)
-
-    print(f"Timed out waiting for Elasticsearch: {last_error}", file=sys.stderr)
-    return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-```
-
-### Start Elasticsearch, Kibana, Logstash, and Filebeat
+On Linux or macOS:
 
 ```bash
-docker compose up -d
-python3 scripts/wait_for_elasticsearch.py
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Or with Make:
+On Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### Create a Docker Network
+
+All lab containers use the same Docker network. This lets containers communicate using container names.
 
 ```bash
-make start
+docker network inspect net >/dev/null 2>&1 || docker network create net
 ```
 
-Verify that the services are available:
+### Start Elasticsearch
 
-| Service | URL or command |
-|---|---|
-| Elasticsearch | `http://localhost:9200` |
-| Kibana | `http://localhost:5601` |
-| Logstash logs | `docker logs -f task6-logstash` |
-| Filebeat logs | `docker logs -f task6-filebeat` |
+If the Elasticsearch container does not exist yet, create it:
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  --network net \
+  -p ${ES_PORT}:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  -v esdata:/usr/share/elasticsearch/data \
+  docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
+```
+
+If the container already exists from a previous run, start it instead:
+
+```bash
+docker start elasticsearch
+```
+
+### Start Kibana
+
+If the Kibana container does not exist yet, create it:
+
+```bash
+docker run -d \
+  --name kibana \
+  --network net \
+  -p ${KIBANA_PORT}:5601 \
+  -e "ELASTICSEARCH_HOSTS=http://elasticsearch:9200" \
+  docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
+```
+
+If the container already exists from a previous run, start it instead:
+
+```bash
+docker start kibana
+```
+
+### Verify Elasticsearch and Kibana
+
+Verify Elasticsearch from the command line:
 
 ```bash
 curl http://localhost:9200
 ```
 
+Open these URLs in your browser:
+
+```text
+Elasticsearch: http://localhost:9200
+Kibana:        http://localhost:5601
+```
+
+Check running containers:
+
+```bash
+docker ps
+```
+
+At this point, you should only see these lab containers:
+
+```text
+elasticsearch
+kibana
+```
+
 ## Task 1: Sample Data Preparation
 
-The original version used a small manually written `products.csv`. That is useful for explaining the format, but an end-to-end lab should generate data automatically so learners can test bulk ingestion with more than five rows.
+The original small CSV example is useful for explaining the file format, but an end-to-end ingestion lab should generate data automatically.
 
-### Manual example: `data/products.csv`
+In this task, you will create a Python script that generates repeatable product data.
+
+The output file will be:
+
+```text
+data/products.csv
+```
+
+### Manual CSV Example
+
+A product CSV file has this structure:
 
 ```csv
 sku,name,price,category,in_stock,description,rating
@@ -283,9 +228,9 @@ SKU-00004,USB-C Hub 4,45.00,Electronics,true,7-port USB-C hub with HDMI output,4
 SKU-00005,Office Chair 5,199.99,Furniture,true,Mesh back ergonomic office chair,4.6
 ```
 
-### Better approach: create `scripts/prepare_products.py`
+Instead of manually writing the file, this lab generates it with Python.
 
-This script generates repeatable product data with realistic fields and enough rows to make bulk ingestion meaningful.
+### Create `scripts/prepare_products.py`
 
 ```python
 #!/usr/bin/env python3
@@ -294,6 +239,7 @@ import argparse
 import csv
 import random
 from pathlib import Path
+
 
 PRODUCT_SEEDS = [
     ("Wireless Mouse", "Electronics", "Ergonomic wireless mouse with USB receiver"),
@@ -316,12 +262,23 @@ def generate_products(rows: int, output: Path, seed: int) -> None:
     with output.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(
             file,
-            fieldnames=["sku", "name", "price", "category", "in_stock", "description", "rating"],
+            fieldnames=[
+                "sku",
+                "name",
+                "price",
+                "category",
+                "in_stock",
+                "description",
+                "rating",
+            ],
         )
+
         writer.writeheader()
+
         for i in range(1, rows + 1):
             base_name, category, description = random.choice(PRODUCT_SEEDS)
             price = round(random.uniform(5, 600), 2)
+
             writer.writerow(
                 {
                     "sku": f"SKU-{i:05d}",
@@ -343,6 +300,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("data/products.csv"))
     parser.add_argument("--seed", type=int, default=7)
     args = parser.parse_args()
+
     generate_products(args.rows, args.output, args.seed)
     return 0
 
@@ -351,7 +309,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-Run it:
+### Run the Product Data Generator
 
 ```bash
 python3 scripts/prepare_products.py --rows 100 --output data/products.csv
@@ -369,30 +327,73 @@ Preview the generated file:
 head data/products.csv
 ```
 
-## Task 2: Data Ingestion via Python Bulk API
+Expected structure:
 
-The single-document approach is slow for large datasets. Use the Bulk API and an Elasticsearch ingest pipeline instead.
+```csv
+sku,name,price,category,in_stock,description,rating
+SKU-00001,Office Chair 1,569.15,Furniture,true,Mesh back ergonomic office chair,4.3
+SKU-00002,Wireless Mouse 2,493.26,Electronics,true,Ergonomic wireless mouse with USB receiver,4.2
+```
 
-This task uses two scripts:
+### Task 2: Data Ingestion via Python Bulk API
 
-1. `setup_elastic_assets.py` creates the index, mappings, index templates, and ingest pipelines.
-2. `ingest_products_bulk.py` reads the CSV and sends batches to Elasticsearch.
+Indexing documents one at a time is slow for larger datasets.
 
-### Create `scripts/setup_elastic_assets.py`
+In this task, you will use:
 
-This script prepares Elasticsearch for every part of the lab:
+1. An Elasticsearch index with explicit mappings.
+2. An Elasticsearch ingest pipeline.
+3. The Bulk API from Python.
 
-- `products` index with explicit mappings.
-- `enrich-products` ingest pipeline for product documents.
-- `app-logs-pipeline` ingest pipeline for Filebeat JSON logs.
-- `weblogs-logstash-*` index template.
-- `filebeat-app-*` index template.
+The Python script will read `data/products.csv`, convert values to correct types, send batches to Elasticsearch, and report the final document count.
+
+### What the Product Pipeline Does
+
+The product ingest pipeline enriches product documents at index time.
+
+It will:
+
+* Add `ingested_at`.
+* Convert `category` to uppercase.
+* Add `price_tier`.
+* Add `available_label`.
+
+Example:
+
+```json
+{
+  "category": "Electronics",
+  "price": 150,
+  "in_stock": true
+}
+```
+
+Becomes:
+
+```json
+{
+  "category": "ELECTRONICS",
+  "price": 150,
+  "in_stock": true,
+  "price_tier": "premium",
+  "available_label": "available",
+  "ingested_at": "2026-06-10T12:00:00.000Z"
+}
+```
+
+### Create `scripts/setup_product_assets.py`
+
+This script creates only the assets needed for product ingestion:
+
+* `products` index
+* `enrich-products` ingest pipeline
 
 ```python
 #!/usr/bin/env python3
-"""Create Elasticsearch ingest pipelines, index templates, and the products index."""
+"""Create Elasticsearch assets for product ingestion."""
 import argparse
 import sys
+
 import requests
 
 
@@ -400,17 +401,27 @@ def put_json(session: requests.Session, url: str, body: dict) -> None:
     response = session.put(url, json=body, timeout=20)
     if not response.ok:
         raise RuntimeError(f"PUT {url} failed: HTTP {response.status_code} {response.text}")
+
     print(f"OK PUT {url}")
 
 
-def delete_index_if_requested(session: requests.Session, es_url: str, index: str, reset: bool) -> None:
+def delete_index_if_requested(
+    session: requests.Session,
+    es_url: str,
+    index: str,
+    reset: bool,
+) -> None:
     if not reset:
         return
+
     response = session.delete(f"{es_url}/{index}", timeout=20)
+
     if response.status_code in (200, 404):
         print(f"Reset index {index}: HTTP {response.status_code}")
     else:
-        raise RuntimeError(f"DELETE {index} failed: HTTP {response.status_code} {response.text}")
+        raise RuntimeError(
+            f"DELETE {index} failed: HTTP {response.status_code} {response.text}"
+        )
 
 
 def main() -> int:
@@ -421,6 +432,7 @@ def main() -> int:
     args = parser.parse_args()
 
     session = requests.Session()
+
     try:
         health = session.get(args.es_url, timeout=10)
         health.raise_for_status()
@@ -428,76 +440,58 @@ def main() -> int:
         product_pipeline = {
             "description": "Normalize and enrich product documents during ingestion",
             "processors": [
-                {"set": {"field": "ingested_at", "value": "{{_ingest.timestamp}}"}},
-                {"uppercase": {"field": "category", "ignore_missing": True}},
+                {
+                    "set": {
+                        "field": "ingested_at",
+                        "value": "{{_ingest.timestamp}}",
+                    }
+                },
+                {
+                    "uppercase": {
+                        "field": "category",
+                        "ignore_missing": True,
+                    }
+                },
                 {
                     "script": {
                         "lang": "painless",
-                        "source": "ctx.price_tier = ctx.price >= 100 ? 'premium' : 'standard'; ctx.available_label = ctx.in_stock == true ? 'available' : 'out_of_stock';",
+                        "source": (
+                            "ctx.price_tier = ctx.price >= 100 ? 'premium' : 'standard'; "
+                            "ctx.available_label = ctx.in_stock == true ? "
+                            "'available' : 'out_of_stock';"
+                        ),
                     }
                 },
             ],
         }
-        put_json(session, f"{args.es_url}/_ingest/pipeline/enrich-products", product_pipeline)
 
-        app_logs_pipeline = {
-            "description": "Enrich application JSON logs shipped by Filebeat",
-            "processors": [
-                {"set": {"field": "ingested_at", "value": "{{_ingest.timestamp}}"}},
-                {
-                    "script": {
-                        "lang": "painless",
-                        "source": "if (ctx.containsKey('status') && ctx.status >= 500) { ctx.error_class = 'server_error'; } else if (ctx.containsKey('status') && ctx.status >= 400) { ctx.error_class = 'client_error'; } else { ctx.error_class = 'none'; }",
-                    }
-                },
-            ],
-        }
-        put_json(session, f"{args.es_url}/_ingest/pipeline/app-logs-pipeline", app_logs_pipeline)
+        put_json(
+            session,
+            f"{args.es_url}/_ingest/pipeline/enrich-products",
+            product_pipeline,
+        )
 
-        weblogs_template = {
-            "index_patterns": ["weblogs-logstash-*"],
-            "template": {
-                "mappings": {
-                    "properties": {
-                        "clientip": {"type": "ip"},
-                        "verb": {"type": "keyword"},
-                        "request": {"type": "keyword"},
-                        "response": {"type": "integer"},
-                        "bytes": {"type": "long"},
-                        "pipeline": {"type": "keyword"},
-                        "geo.location": {"type": "geo_point"},
-                    }
-                }
-            },
-        }
-        put_json(session, f"{args.es_url}/_index_template/weblogs-logstash-template", weblogs_template)
+        delete_index_if_requested(
+            session,
+            args.es_url,
+            args.products_index,
+            args.reset,
+        )
 
-        app_logs_template = {
-            "index_patterns": ["filebeat-app-*"],
-            "template": {
-                "mappings": {
-                    "properties": {
-                        "service": {"type": "keyword"},
-                        "environment": {"type": "keyword"},
-                        "level": {"type": "keyword"},
-                        "status": {"type": "integer"},
-                        "latency_ms": {"type": "integer"},
-                        "event_time": {"type": "date"},
-                        "error_class": {"type": "keyword"},
-                        "ingested_at": {"type": "date"},
-                    }
-                }
-            },
-        }
-        put_json(session, f"{args.es_url}/_index_template/filebeat-app-template", app_logs_template)
-
-        delete_index_if_requested(session, args.es_url, args.products_index, args.reset)
         products_mapping = {
-            "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+            "settings": {
+                "number_of_shards": 1,
+                "number_of_replicas": 0,
+            },
             "mappings": {
                 "properties": {
                     "sku": {"type": "keyword"},
-                    "name": {"type": "text", "fields": {"raw": {"type": "keyword"}}},
+                    "name": {
+                        "type": "text",
+                        "fields": {
+                            "raw": {"type": "keyword"},
+                        },
+                    },
                     "price": {"type": "float"},
                     "category": {"type": "keyword"},
                     "price_tier": {"type": "keyword"},
@@ -505,21 +499,32 @@ def main() -> int:
                     "available_label": {"type": "keyword"},
                     "description": {"type": "text"},
                     "rating": {"type": "float"},
+                    "source_file": {"type": "keyword"},
+                    "loaded_at": {"type": "date"},
                     "ingested_at": {"type": "date"},
                 }
             },
         }
-        response = session.put(f"{args.es_url}/{args.products_index}", json=products_mapping, timeout=20)
+
+        response = session.put(
+            f"{args.es_url}/{args.products_index}",
+            json=products_mapping,
+            timeout=20,
+        )
+
         if response.status_code == 400 and "resource_already_exists_exception" in response.text:
             print(f"Index {args.products_index} already exists; use --reset to recreate it")
         elif not response.ok:
-            raise RuntimeError(f"Create products index failed: HTTP {response.status_code} {response.text}")
+            raise RuntimeError(
+                f"Create products index failed: HTTP {response.status_code} {response.text}"
+            )
         else:
             print(f"OK created index {args.products_index}")
 
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         return 1
+
     return 0
 
 
@@ -527,21 +532,23 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-Run setup:
+### Run Product Asset Setup
 
 ```bash
-python3 scripts/setup_elastic_assets.py --reset
+python3 scripts/setup_product_assets.py --reset
 ```
 
-Or with Make:
+Expected output:
 
-```bash
-make setup
+```text
+OK PUT http://localhost:9200/_ingest/pipeline/enrich-products
+Reset index products: HTTP 404
+OK created index products
 ```
+
+If the index already existed, HTTP 200 may appear instead of HTTP 404 during reset.
 
 ### Create `scripts/ingest_products_bulk.py`
-
-This script reads `data/products.csv`, converts CSV strings to correct data types, sends data through the Bulk API, checks partial failures, refreshes the index, and prints the final count.
 
 ```python
 #!/usr/bin/env python3
@@ -552,6 +559,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
 import requests
 
 
@@ -559,10 +567,17 @@ def to_bool(value: str) -> bool:
     return value.strip().lower() in {"true", "1", "yes", "y"}
 
 
-def build_bulk_body(csv_path: Path, index_name: str, pipeline: str | None, batch_size: int):
+def build_bulk_body(
+    csv_path: Path,
+    index_name: str,
+    pipeline: str | None,
+    batch_size: int,
+):
     with csv_path.open("r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         batch = []
+        line_no = 0
+
         for line_no, row in enumerate(reader, start=1):
             try:
                 row["price"] = float(row["price"])
@@ -573,17 +588,25 @@ def build_bulk_body(csv_path: Path, index_name: str, pipeline: str | None, batch
             except (KeyError, ValueError) as exc:
                 raise ValueError(f"Bad CSV row {line_no}: {row} ({exc})") from exc
 
-            action = {"index": {"_index": index_name, "_id": row.get("sku") or line_no}}
+            action = {
+                "index": {
+                    "_index": index_name,
+                    "_id": row.get("sku") or line_no,
+                }
+            }
+
             if pipeline:
                 action["index"]["pipeline"] = pipeline
+
             batch.append(json.dumps(action))
             batch.append(json.dumps(row))
 
             if line_no % batch_size == 0:
                 yield "\n".join(batch) + "\n", line_no
                 batch = []
+
         if batch:
-            yield "\n".join(batch) + "\n", line_no if 'line_no' in locals() else 0
+            yield "\n".join(batch) + "\n", line_no
 
 
 def send_bulk(session: requests.Session, es_url: str, body: str) -> tuple[int, list[str]]:
@@ -593,15 +616,24 @@ def send_bulk(session: requests.Session, es_url: str, body: str) -> tuple[int, l
         headers={"Content-Type": "application/x-ndjson"},
         timeout=60,
     )
+
     if not response.ok:
-        raise RuntimeError(f"Bulk request failed: HTTP {response.status_code} {response.text}")
+        raise RuntimeError(
+            f"Bulk request failed: HTTP {response.status_code} {response.text}"
+        )
 
     result = response.json()
     errors = []
+
     for item in result.get("items", []):
         action = item.get("index", {})
         if "error" in action:
-            errors.append(f"doc={action.get('_id')} status={action.get('status')} reason={action['error'].get('reason')}")
+            errors.append(
+                f"doc={action.get('_id')} "
+                f"status={action.get('status')} "
+                f"reason={action['error'].get('reason')}"
+            )
+
     return len(result.get("items", [])), errors
 
 
@@ -615,14 +647,23 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.csv.exists():
-        print(f"CSV not found: {args.csv}. Run scripts/prepare_products.py first.", file=sys.stderr)
+        print(
+            f"CSV not found: {args.csv}. Run scripts/prepare_products.py first.",
+            file=sys.stderr,
+        )
         return 1
 
     session = requests.Session()
     total = 0
     all_errors = []
+
     try:
-        for body, upto in build_bulk_body(args.csv, args.index, args.pipeline, args.batch_size):
+        for body, upto in build_bulk_body(
+            args.csv,
+            args.index,
+            args.pipeline,
+            args.batch_size,
+        ):
             indexed, errors = send_bulk(session, args.es_url, body)
             total += indexed
             all_errors.extend(errors)
@@ -635,11 +676,20 @@ def main() -> int:
             return 1
 
         session.post(f"{args.es_url}/{args.index}/_refresh", timeout=20)
-        count = session.get(f"{args.es_url}/{args.index}/_count", timeout=20).json()["count"]
-        print(f"Successfully indexed {total} product documents. Current {args.index} count: {count}")
+        count = session.get(
+            f"{args.es_url}/{args.index}/_count",
+            timeout=20,
+        ).json()["count"]
+
+        print(
+            f"Successfully indexed {total} product documents. "
+            f"Current {args.index} count: {count}"
+        )
+
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         return 1
+
     return 0
 
 
@@ -647,18 +697,17 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-Run the complete product ingestion flow:
+### Run the Complete Product Ingestion Flow
 
 ```bash
 python3 scripts/prepare_products.py --rows 100 --output data/products.csv
-python3 scripts/setup_elastic_assets.py --reset
-python3 scripts/ingest_products_bulk.py   --csv data/products.csv   --index products   --pipeline enrich-products
-```
 
-Or with Make:
+python3 scripts/setup_product_assets.py --reset
 
-```bash
-make ingest
+python3 scripts/ingest_products_bulk.py \
+  --csv data/products.csv \
+  --index products \
+  --pipeline enrich-products
 ```
 
 Expected output:
@@ -666,21 +715,18 @@ Expected output:
 ```text
 Wrote 100 product rows to data/products.csv
 OK PUT http://localhost:9200/_ingest/pipeline/enrich-products
-OK PUT http://localhost:9200/_ingest/pipeline/app-logs-pipeline
-OK PUT http://localhost:9200/_index_template/weblogs-logstash-template
-OK PUT http://localhost:9200/_index_template/filebeat-app-template
 OK created index products
 Sent batch ending at CSV row 100: 100 actions
 Successfully indexed 100 product documents. Current products count: 100
 ```
 
-Verify the products index:
+### Verify the Products Index
 
 ```bash
 curl "http://localhost:9200/products/_search?pretty&size=3"
 ```
 
-Example enriched document fields:
+Look for enriched fields:
 
 ```json
 {
@@ -695,19 +741,60 @@ Example enriched document fields:
 }
 ```
 
+Check only the count:
+
+```bash
+curl "http://localhost:9200/products/_count?pretty"
+```
+
 ## Task 3: Using Logstash with Advanced Filters
 
 Logstash is useful when logs need richer parsing, transformations, conditional logic, and enrichment before indexing.
 
-In this lab, Logstash runs inside Docker and tails this host file through a mounted volume:
+In this task, Logstash will read Apache combined access logs from:
 
 ```text
 data/logs/access.log
 ```
 
+Inside the Logstash container, that file will appear as:
+
+```text
+/usr/share/logstash/sample/access.log
+```
+
+Logstash will parse the logs and write documents to:
+
+```text
+weblogs-logstash-YYYY.MM.dd
+```
+
+### Create the Logstash Folder
+
+```bash
+mkdir -p logstash/pipeline
+```
+
+The project structure now expands to:
+
+```text
+ingestion-lab/
+├── logstash/
+│   └── pipeline/
+│       └── pipeline.conf
+```
+
 ### Create `logstash/pipeline/pipeline.conf`
 
-This pipeline reads Apache combined access logs, parses them with `grok`, converts field types, tags errors and large responses, adds GeoIP data when possible, and writes documents to `weblogs-logstash-YYYY.MM.dd`.
+This pipeline:
+
+* Reads Apache access logs.
+* Parses each line with `grok`.
+* Converts response code and byte fields to numbers.
+* Adds a custom `pipeline` field.
+* Adds tags for client errors, server errors, and large responses.
+* Adds GeoIP data when possible.
+* Writes to `weblogs-logstash-*`.
 
 ```conf
 input {
@@ -737,18 +824,26 @@ filter {
       "response" => "integer"
       "bytes" => "integer"
     }
-    add_field => { "pipeline" => "logstash-apache" }
+    add_field => {
+      "pipeline" => "logstash-apache"
+    }
     remove_field => ["message", "@version"]
   }
 
   if [response] >= 500 {
-    mutate { add_tag => ["server_error"] }
+    mutate {
+      add_tag => ["server_error"]
+    }
   } else if [response] >= 400 {
-    mutate { add_tag => ["client_error"] }
+    mutate {
+      add_tag => ["client_error"]
+    }
   }
 
   if [bytes] > 1000000 {
-    mutate { add_tag => ["large_response"] }
+    mutate {
+      add_tag => ["large_response"]
+    }
   }
 
   geoip {
@@ -765,24 +860,156 @@ output {
     index => "weblogs-logstash-%{+YYYY.MM.dd}"
   }
 
-  stdout { codec => rubydebug }
+  stdout {
+    codec => rubydebug
+  }
 }
 ```
 
-### Create the shared log generator: `scripts/generate_logs.py`
+### Create `scripts/setup_logstash_assets.py`
 
-This script creates continuous log traffic for both Task 3 and Task 4.
-
-- Apache access logs go to `data/logs/access.log` for Logstash.
-- JSON application logs go to `data/logs/app/application.log` for Filebeat.
-- The default rate is 10 events per minute per file.
+This script creates the Elasticsearch index template for Logstash output.
 
 ```python
 #!/usr/bin/env python3
-"""Generate Apache access logs and JSON application logs continuously.
+"""Create Elasticsearch assets needed for Logstash Apache logs."""
+import argparse
+import sys
 
-Default behavior: write 10 Apache access lines and 10 JSON app lines per minute until stopped.
-Use --duration-minutes for a finite classroom demo.
+import requests
+
+
+def put_json(session: requests.Session, url: str, body: dict) -> None:
+    response = session.put(url, json=body, timeout=20)
+    if not response.ok:
+        raise RuntimeError(f"PUT {url} failed: HTTP {response.status_code} {response.text}")
+
+    print(f"OK PUT {url}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--es-url", default="http://localhost:9200")
+    args = parser.parse_args()
+
+    session = requests.Session()
+
+    try:
+        health = session.get(args.es_url, timeout=10)
+        health.raise_for_status()
+
+        weblogs_template = {
+            "index_patterns": ["weblogs-logstash-*"],
+            "template": {
+                "mappings": {
+                    "properties": {
+                        "clientip": {"type": "ip"},
+                        "ident": {"type": "keyword"},
+                        "auth": {"type": "keyword"},
+                        "verb": {"type": "keyword"},
+                        "request": {"type": "keyword"},
+                        "httpversion": {"type": "keyword"},
+                        "response": {"type": "integer"},
+                        "bytes": {"type": "long"},
+                        "referrer": {"type": "keyword"},
+                        "agent": {"type": "text"},
+                        "pipeline": {"type": "keyword"},
+                        "geo": {
+                            "properties": {
+                                "location": {"type": "geo_point"},
+                                "country_name": {"type": "keyword"},
+                                "city_name": {"type": "keyword"},
+                            }
+                        },
+                    }
+                }
+            },
+        }
+
+        put_json(
+            session,
+            f"{args.es_url}/_index_template/weblogs-logstash-template",
+            weblogs_template,
+        )
+
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+Run it:
+
+```bash
+python3 scripts/setup_logstash_assets.py
+```
+
+Expected output:
+
+```text
+OK PUT http://localhost:9200/_index_template/weblogs-logstash-template
+```
+
+### Start the Logstash Container
+
+Make sure the environment variables are loaded:
+
+```bash
+source .env
+```
+
+Start Logstash:
+
+```bash
+docker run -d \
+  --name logstash \
+  --network net \
+  -e "LS_JAVA_OPTS=-Xms256m -Xmx256m" \
+  -v "$PWD/logstash/pipeline:/usr/share/logstash/pipeline:ro" \
+  -v "$PWD/data/logs:/usr/share/logstash/sample:ro" \
+  -v logstashdata:/usr/share/logstash/data \
+  docker.elastic.co/logstash/logstash:${ELASTIC_VERSION}
+```
+
+Watch Logstash startup logs:
+
+```bash
+docker logs -f logstash
+```
+
+If you edit the pipeline later, restart Logstash:
+
+```bash
+docker restart logstash
+```
+
+### Create the Shared Log Generator: `scripts/generate_logs.py`
+
+This script can generate:
+
+* Apache access logs for Logstash.
+* JSON application logs for Filebeat.
+* Both log types if needed.
+
+The default paths are:
+
+```text
+data/logs/access.log
+data/logs/app/application.log
+```
+
+```python
+#!/usr/bin/env python3
+"""Generate Apache access logs and JSON application logs.
+
+Use --mode apache for Logstash.
+Use --mode app for Filebeat.
+Use --mode both to generate both log types.
 """
 import argparse
 import json
@@ -793,15 +1020,52 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+
 RUNNING = True
 
 IP_POOL = [
-    "8.8.8.8", "1.1.1.1", "20.42.65.84", "34.117.59.81", "52.95.110.1",
-    "93.184.216.34", "142.250.180.14", "185.199.108.153", "151.101.1.69",
+    "8.8.8.8",
+    "1.1.1.1",
+    "20.42.65.84",
+    "34.117.59.81",
+    "52.95.110.1",
+    "93.184.216.34",
+    "142.250.180.14",
+    "185.199.108.153",
+    "151.101.1.69",
 ]
-PATHS = ["/", "/index.html", "/products", "/products/42", "/cart", "/checkout", "/api/search", "/api/products", "/favicon.ico"]
+
+PATHS = [
+    "/",
+    "/index.html",
+    "/products",
+    "/products/42",
+    "/cart",
+    "/checkout",
+    "/api/search",
+    "/api/products",
+    "/favicon.ico",
+]
+
 METHODS = ["GET", "GET", "GET", "POST", "PUT"]
-STATUSES = [200, 200, 200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503]
+
+STATUSES = [
+    200,
+    200,
+    200,
+    201,
+    204,
+    301,
+    302,
+    400,
+    401,
+    403,
+    404,
+    500,
+    502,
+    503,
+]
+
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6)",
@@ -809,6 +1073,7 @@ USER_AGENTS = [
     "curl/8.0.1",
     "Python-requests/2.31.0",
 ]
+
 SERVICES = ["catalog", "checkout", "search", "identity"]
 LEVELS = ["INFO", "INFO", "INFO", "WARN", "ERROR"]
 
@@ -830,13 +1095,22 @@ def write_apache_line(path: Path) -> None:
     bytes_sent = random.randint(100, 2_500_000 if status < 500 else 50_000)
     referrer = random.choice(["-", "https://example.com/", "https://search.example.test/"])
     user_agent = random.choice(USER_AGENTS)
-    line = f'{client_ip} - - [{apache_timestamp()}] "{method} {request_path} HTTP/1.1" {status} {bytes_sent} "{referrer}" "{user_agent}"\n'
+
+    line = (
+        f'{client_ip} - - [{apache_timestamp()}] '
+        f'"{method} {request_path} HTTP/1.1" '
+        f'{status} {bytes_sent} "{referrer}" "{user_agent}"\n'
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
     with path.open("a", encoding="utf-8") as file:
         file.write(line)
 
 
 def write_app_line(path: Path) -> None:
     status = random.choice(STATUSES)
+
     event = {
         "event_time": datetime.now(timezone.utc).isoformat(),
         "service": random.choice(SERVICES),
@@ -844,49 +1118,90 @@ def write_app_line(path: Path) -> None:
         "level": "ERROR" if status >= 500 else random.choice(LEVELS),
         "status": status,
         "latency_ms": random.randint(5, 3000),
-        "message_text": random.choice(["request completed", "cache lookup", "database query", "payment authorization"]),
+        "message_text": random.choice(
+            [
+                "request completed",
+                "cache lookup",
+                "database query",
+                "payment authorization",
+            ]
+        ),
         "trace_id": f"trace-{random.randint(100000, 999999)}",
     }
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
     with path.open("a", encoding="utf-8") as file:
         file.write(json.dumps(event) + "\n")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rate", type=int, default=10, help="events per minute per log file")
-    parser.add_argument("--duration-minutes", type=float, default=0, help="0 means run until Ctrl+C")
-    parser.add_argument("--access-log", type=Path, default=Path("data/logs/access.log"))
-    parser.add_argument("--app-log", type=Path, default=Path("data/logs/app/application.log"))
+    parser.add_argument(
+        "--mode",
+        choices=["apache", "app", "both"],
+        default="both",
+        help="which log type to generate",
+    )
+    parser.add_argument(
+        "--rate",
+        type=int,
+        default=10,
+        help="events per minute",
+    )
+    parser.add_argument(
+        "--duration-minutes",
+        type=float,
+        default=0,
+        help="0 means run until Ctrl+C",
+    )
+    parser.add_argument(
+        "--access-log",
+        type=Path,
+        default=Path("data/logs/access.log"),
+    )
+    parser.add_argument(
+        "--app-log",
+        type=Path,
+        default=Path("data/logs/app/application.log"),
+    )
     parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
 
     if args.rate <= 0:
         print("--rate must be positive", file=sys.stderr)
         return 1
+
     if args.seed is not None:
         random.seed(args.seed)
 
     signal.signal(signal.SIGINT, handle_stop)
     signal.signal(signal.SIGTERM, handle_stop)
 
-    args.access_log.parent.mkdir(parents=True, exist_ok=True)
-    args.app_log.parent.mkdir(parents=True, exist_ok=True)
-
     interval = 60.0 / args.rate
     deadline = time.time() + (args.duration_minutes * 60) if args.duration_minutes else None
     written = 0
-    print(f"Writing {args.rate}/minute to {args.access_log} and {args.app_log}. Press Ctrl+C to stop.")
+
+    print(
+        f"Generating mode={args.mode} at {args.rate} events per minute. "
+        "Press Ctrl+C to stop."
+    )
 
     while RUNNING:
         if deadline and time.time() >= deadline:
             break
-        write_apache_line(args.access_log)
-        write_app_line(args.app_log)
+
+        if args.mode in {"apache", "both"}:
+            write_apache_line(args.access_log)
+
+        if args.mode in {"app", "both"}:
+            write_app_line(args.app_log)
+
         written += 1
-        print(f"wrote event pair #{written}", flush=True)
+        print(f"wrote event cycle #{written}", flush=True)
         time.sleep(interval)
 
-    print(f"Stopped. Wrote {written} Apache lines and {written} app JSON lines.")
+    print(f"Stopped after writing {written} event cycles.")
     return 0
 
 
@@ -894,40 +1209,47 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-Generate logs continuously at 10 events per minute:
+### Generate Apache Logs for Logstash
+
+For a short classroom demo:
 
 ```bash
-python3 scripts/generate_logs.py --rate 10
+python3 scripts/generate_logs.py \
+  --mode apache \
+  --rate 10 \
+  --duration-minutes 3
 ```
 
-Generate logs for a finite classroom demo:
+For continuous log generation:
 
 ```bash
-python3 scripts/generate_logs.py --rate 10 --duration-minutes 3
+python3 scripts/generate_logs.py --mode apache --rate 10
 ```
 
 Expected generator output:
 
 ```text
-Writing 10/minute to data/logs/access.log and data/logs/app/application.log. Press Ctrl+C to stop.
-wrote event pair #1
-wrote event pair #2
-wrote event pair #3
+Generating mode=apache at 10 events per minute. Press Ctrl+C to stop.
+wrote event cycle #1
+wrote event cycle #2
+wrote event cycle #3
 ```
 
-Example Apache line generated for Logstash:
+Example Apache line:
 
 ```text
 8.8.8.8 - - [10/Jun/2026:12:05:12 +0000] "GET /products HTTP/1.1" 200 1843 "https://example.com/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6)"
 ```
 
-Watch Logstash parse the logs:
+### Watch Logstash Parse Logs
 
 ```bash
-docker logs -f task6-logstash
+docker logs -f logstash
 ```
 
-Verify indexed Logstash documents:
+You should see parsed events printed by the `rubydebug` output.
+
+### Verify Indexed Logstash Documents
 
 ```bash
 curl "http://localhost:9200/weblogs-logstash-*/_search?pretty&size=3"
@@ -947,32 +1269,66 @@ Example parsed output fields:
 }
 ```
 
+Check the document count:
+
+```bash
+curl "http://localhost:9200/weblogs-logstash-*/_count?pretty"
+```
+
 ## Task 4: Filebeat Configuration
 
-Filebeat is a lightweight log shipper. In this lab, Filebeat reads JSON application logs and sends them directly to Elasticsearch.
+Filebeat is a lightweight log shipper.
 
-The generator from Task 3 writes JSON log events here:
+In this lab, Filebeat reads JSON application logs and sends them directly to Elasticsearch.
+
+The generator writes JSON logs to:
 
 ```text
 data/logs/app/application.log
 ```
 
-The Filebeat container mounts `data/logs` to `/logs`, so inside the container the path is:
+Inside the Filebeat container, the mounted path is:
 
 ```text
 /logs/app/*.log
 ```
 
+Filebeat will write documents to:
+
+```text
+filebeat-app-YYYY.MM.dd
+```
+
+The documents will also pass through an Elasticsearch ingest pipeline called:
+
+```text
+app-logs-pipeline
+```
+
+### Create the Filebeat Folder
+
+```bash
+mkdir -p filebeat
+```
+
+The project structure now expands to:
+
+```text
+ingestion-lab/
+├── filebeat/
+│   └── filebeat.yml
+```
+
 ### Create `filebeat/filebeat.yml`
 
-This Filebeat config:
+This Filebeat configuration:
 
-- Reads JSON application logs.
-- Decodes JSON from the `message` field into top-level fields.
-- Adds host metadata.
-- Drops noisy metadata fields.
-- Sends logs to the `filebeat-app-YYYY.MM.dd` index.
-- Uses the `app-logs-pipeline` ingest pipeline created in Task 2.
+* Reads JSON application logs.
+* Decodes JSON from the `message` field into top-level fields.
+* Adds host metadata.
+* Drops noisy metadata fields.
+* Sends logs to `filebeat-app-YYYY.MM.dd`.
+* Uses the `app-logs-pipeline` ingest pipeline.
 
 ```yaml
 filebeat.inputs:
@@ -992,9 +1348,15 @@ processors:
       target: ""
       overwrite_keys: true
       add_error_key: true
+
   - add_host_metadata: ~
+
   - drop_fields:
-      fields: ["agent.ephemeral_id", "agent.id", "ecs.version", "input.type"]
+      fields:
+        - agent.ephemeral_id
+        - agent.id
+        - ecs.version
+        - input.type
       ignore_missing: true
 
 setup.ilm.enabled: false
@@ -1011,31 +1373,176 @@ logging.level: info
 logging.to_stderr: true
 ```
 
-Restart Filebeat after editing the config:
+### Create `scripts/setup_filebeat_assets.py`
 
-```bash
-docker compose restart filebeat
+This script creates:
+
+* `app-logs-pipeline`
+* `filebeat-app-*` index template
+
+```python
+#!/usr/bin/env python3
+"""Create Elasticsearch assets needed for Filebeat JSON application logs."""
+import argparse
+import sys
+
+import requests
+
+
+def put_json(session: requests.Session, url: str, body: dict) -> None:
+    response = session.put(url, json=body, timeout=20)
+    if not response.ok:
+        raise RuntimeError(f"PUT {url} failed: HTTP {response.status_code} {response.text}")
+
+    print(f"OK PUT {url}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--es-url", default="http://localhost:9200")
+    args = parser.parse_args()
+
+    session = requests.Session()
+
+    try:
+        health = session.get(args.es_url, timeout=10)
+        health.raise_for_status()
+
+        app_logs_pipeline = {
+            "description": "Enrich application JSON logs shipped by Filebeat",
+            "processors": [
+                {
+                    "set": {
+                        "field": "ingested_at",
+                        "value": "{{_ingest.timestamp}}",
+                    }
+                },
+                {
+                    "script": {
+                        "lang": "painless",
+                        "source": (
+                            "if (ctx.containsKey('status') && ctx.status >= 500) { "
+                            "ctx.error_class = 'server_error'; "
+                            "} else if (ctx.containsKey('status') && ctx.status >= 400) { "
+                            "ctx.error_class = 'client_error'; "
+                            "} else { "
+                            "ctx.error_class = 'none'; "
+                            "}"
+                        ),
+                    }
+                },
+            ],
+        }
+
+        put_json(
+            session,
+            f"{args.es_url}/_ingest/pipeline/app-logs-pipeline",
+            app_logs_pipeline,
+        )
+
+        app_logs_template = {
+            "index_patterns": ["filebeat-app-*"],
+            "template": {
+                "mappings": {
+                    "properties": {
+                        "service": {"type": "keyword"},
+                        "environment": {"type": "keyword"},
+                        "level": {"type": "keyword"},
+                        "status": {"type": "integer"},
+                        "latency_ms": {"type": "integer"},
+                        "event_time": {"type": "date"},
+                        "message_text": {"type": "text"},
+                        "trace_id": {"type": "keyword"},
+                        "error_class": {"type": "keyword"},
+                        "ingested_at": {"type": "date"},
+                    }
+                }
+            },
+        }
+
+        put_json(
+            session,
+            f"{args.es_url}/_index_template/filebeat-app-template",
+            app_logs_template,
+        )
+
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 ```
 
-Generate JSON logs:
+Run it:
 
 ```bash
-python3 scripts/generate_logs.py --rate 10 --duration-minutes 3
+python3 scripts/setup_filebeat_assets.py
+```
+
+Expected output:
+
+```text
+OK PUT http://localhost:9200/_ingest/pipeline/app-logs-pipeline
+OK PUT http://localhost:9200/_index_template/filebeat-app-template
+```
+
+### Start the Filebeat Container
+
+Make sure variables are loaded:
+
+```bash
+source .env
+```
+
+Start Filebeat:
+
+```bash
+docker run -d \
+  --name filebeat \
+  --network net \
+  --user root \
+  -v "$PWD/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro" \
+  -v "$PWD/data/logs:/logs:ro" \
+  -v filebeatdata:/usr/share/filebeat/data \
+  docker.elastic.co/beats/filebeat:${ELASTIC_VERSION} \
+  filebeat -e --strict.perms=false
 ```
 
 Watch Filebeat:
 
 ```bash
-docker logs -f task6-filebeat
+docker logs -f filebeat
 ```
 
-Verify indexed Filebeat documents:
+If you edit the Filebeat configuration later, restart Filebeat:
 
 ```bash
-curl "http://localhost:9200/filebeat-app-*/_search?pretty&size=3"
+docker restart filebeat
 ```
 
-Example generated JSON log before Filebeat ships it:
+### Generate JSON Application Logs
+
+```bash
+python3 scripts/generate_logs.py \
+  --mode app \
+  --rate 10 \
+  --duration-minutes 3
+```
+
+Expected generator output:
+
+```text
+Generating mode=app at 10 events per minute. Press Ctrl+C to stop.
+wrote event cycle #1
+wrote event cycle #2
+wrote event cycle #3
+```
+
+Example generated JSON log:
 
 ```json
 {
@@ -1050,29 +1557,51 @@ Example generated JSON log before Filebeat ships it:
 }
 ```
 
+### Verify Filebeat Documents
+
+```bash
+curl "http://localhost:9200/filebeat-app-*/_search?pretty&size=3"
+```
+
 Example enriched document field added by the Elasticsearch ingest pipeline:
 
 ```json
 {
+  "service": "checkout",
+  "environment": "lab",
+  "level": "ERROR",
+  "status": 503,
+  "latency_ms": 1884,
+  "message_text": "payment authorization",
+  "trace_id": "trace-514223",
   "error_class": "server_error",
   "ingested_at": "2026-06-10T12:06:31.120Z"
 }
 ```
 
+Check the count:
+
+```bash
+curl "http://localhost:9200/filebeat-app-*/_count?pretty"
+```
+
 ## Task 5: Elasticsearch Ingest Pipelines
 
-Elasticsearch ingest pipelines transform documents at index time without running a separate Logstash pipeline.
+Elasticsearch ingest pipelines transform documents at index time.
 
-This lab creates two pipelines in `scripts/setup_elastic_assets.py`:
+This lab uses two pipelines:
 
-| Pipeline | Used by | Purpose |
-|---|---|---|
-| `enrich-products` | Python Bulk API | Uppercase category, add ingest timestamp, classify price tier, classify availability |
-| `app-logs-pipeline` | Filebeat output | Add ingest timestamp and classify HTTP status into `error_class` |
+| Pipeline            | Created In | Used By         | Purpose                                                                              |
+| - | - |  |  |
+| `enrich-products`   | Task 2     | Python Bulk API | Uppercase category, add ingest timestamp, classify price tier, classify availability |
+| `app-logs-pipeline` | Task 4     | Filebeat        | Add ingest timestamp and classify HTTP status into `error_class`                     |
 
-### Product ingest pipeline
 
-The product pipeline is created by the setup script with this body:
+### Product Ingest Pipeline
+
+The product pipeline is created by `scripts/setup_product_assets.py`.
+
+It uses this body:
 
 ```json
 {
@@ -1100,15 +1629,27 @@ The product pipeline is created by the setup script with this body:
 }
 ```
 
-Create or update it manually with curl if needed:
+### Create or Update the Product Pipeline Manually
 
 ```bash
-curl -X PUT "http://localhost:9200/_ingest/pipeline/enrich-products"   -H 'Content-Type: application/json'   -d @- <<'JSON'
+curl -X PUT "http://localhost:9200/_ingest/pipeline/enrich-products" \
+  -H "Content-Type: application/json" \
+  -d @- <<'JSON'
 {
   "description": "Normalize and enrich product documents during ingestion",
   "processors": [
-    { "set": { "field": "ingested_at", "value": "{{_ingest.timestamp}}" } },
-    { "uppercase": { "field": "category", "ignore_missing": true } },
+    {
+      "set": {
+        "field": "ingested_at",
+        "value": "{{_ingest.timestamp}}"
+      }
+    },
+    {
+      "uppercase": {
+        "field": "category",
+        "ignore_missing": true
+      }
+    },
     {
       "script": {
         "lang": "painless",
@@ -1120,10 +1661,12 @@ curl -X PUT "http://localhost:9200/_ingest/pipeline/enrich-products"   -H 'Conte
 JSON
 ```
 
-Test the pipeline:
+### Test the Product Pipeline
 
 ```bash
-curl -X POST "http://localhost:9200/_ingest/pipeline/enrich-products/_simulate?pretty"   -H 'Content-Type: application/json'   -d @- <<'JSON'
+curl -X POST "http://localhost:9200/_ingest/pipeline/enrich-products/_simulate?pretty" \
+  -H "Content-Type: application/json" \
+  -d @- <<'JSON'
 {
   "docs": [
     {
@@ -1150,9 +1693,9 @@ Expected important fields:
 }
 ```
 
-### Application log ingest pipeline
+### Application Log Ingest Pipeline
 
-The application log pipeline classifies status codes:
+The application log pipeline classifies status codes.
 
 ```json
 {
@@ -1174,15 +1717,32 @@ The application log pipeline classifies status codes:
 }
 ```
 
-Test it:
+### Test the Application Log Pipeline
 
 ```bash
-curl -X POST "http://localhost:9200/_ingest/pipeline/app-logs-pipeline/_simulate?pretty"   -H 'Content-Type: application/json'   -d @- <<'JSON'
+curl -X POST "http://localhost:9200/_ingest/pipeline/app-logs-pipeline/_simulate?pretty" \
+  -H "Content-Type: application/json" \
+  -d @- <<'JSON'
 {
   "docs": [
-    { "_source": { "service": "checkout", "status": 503 } },
-    { "_source": { "service": "catalog", "status": 404 } },
-    { "_source": { "service": "search", "status": 200 } }
+    {
+      "_source": {
+        "service": "checkout",
+        "status": 503
+      }
+    },
+    {
+      "_source": {
+        "service": "catalog",
+        "status": 404
+      }
+    },
+    {
+      "_source": {
+        "service": "search",
+        "status": 200
+      }
+    }
   ]
 }
 JSON
@@ -1202,7 +1762,7 @@ At this point, all three ingestion paths should be active:
 
 1. Python Bulk API sends CSV product data to `products`.
 2. Logstash parses Apache access logs into `weblogs-logstash-*`.
-3. Filebeat ships JSON logs into `filebeat-app-*`.
+3. Filebeat ships JSON application logs into `filebeat-app-*`.
 
 ### Create `scripts/check_results.py`
 
@@ -1210,15 +1770,18 @@ This script prints counts and sample documents from each index pattern.
 
 ```python
 #!/usr/bin/env python3
-"""Print document counts and a few sample documents from the lab indices."""
+"""Print document counts and sample documents from the lab indices."""
 import argparse
+
 import requests
 
 
 def count(session: requests.Session, es_url: str, pattern: str) -> int:
     response = session.get(f"{es_url}/{pattern}/_count", timeout=20)
+
     if response.status_code == 404:
         return 0
+
     response.raise_for_status()
     return response.json()["count"]
 
@@ -1226,14 +1789,22 @@ def count(session: requests.Session, es_url: str, pattern: str) -> int:
 def sample(session: requests.Session, es_url: str, pattern: str) -> None:
     response = session.get(
         f"{es_url}/{pattern}/_search",
-        json={"size": 2, "sort": [{"@timestamp": "desc"}], "query": {"match_all": {}}},
+        json={
+            "size": 2,
+            "query": {
+                "match_all": {}
+            },
+        },
         timeout=20,
     )
+
     if response.status_code == 404:
-        print(f"No index matched {pattern}")
+        print(f"  No index matched {pattern}")
         return
+
     response.raise_for_status()
     hits = response.json()["hits"]["hits"]
+
     for hit in hits:
         print(f"  {hit['_index']} -> {hit['_source']}")
 
@@ -1242,15 +1813,22 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--es-url", default="http://localhost:9200")
     args = parser.parse_args()
+
     session = requests.Session()
 
-    patterns = ["products", "weblogs-logstash-*", "filebeat-app-*"]
+    patterns = [
+        "products",
+        "weblogs-logstash-*",
+        "filebeat-app-*",
+    ]
+
     for pattern in patterns:
         try:
-            print(f"{pattern}: {count(session, args.es_url, pattern)} documents")
+            print(f"\n{pattern}: {count(session, args.es_url, pattern)} documents")
             sample(session, args.es_url, pattern)
         except Exception as exc:
-            print(f"Could not query {pattern}: {exc}")
+            print(f"\nCould not query {pattern}: {exc}")
+
     return 0
 
 
@@ -1258,16 +1836,10 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-Run it:
+### Run the Check Script
 
 ```bash
 python3 scripts/check_results.py
-```
-
-Or with Make:
-
-```bash
-make check
 ```
 
 Expected style of output:
@@ -1275,13 +1847,15 @@ Expected style of output:
 ```text
 products: 100 documents
   products -> {'sku': 'SKU-00001', 'category': 'FURNITURE', 'price_tier': 'premium', ...}
+
 weblogs-logstash-*: 30 documents
   weblogs-logstash-2026.06.10 -> {'clientip': '8.8.8.8', 'response': 200, ...}
+
 filebeat-app-*: 30 documents
   filebeat-app-2026.06.10 -> {'service': 'checkout', 'status': 503, 'error_class': 'server_error', ...}
 ```
 
-### Query counts manually
+### Query Counts Manually
 
 ```bash
 curl "http://localhost:9200/products/_count?pretty"
@@ -1289,72 +1863,60 @@ curl "http://localhost:9200/weblogs-logstash-*/_count?pretty"
 curl "http://localhost:9200/filebeat-app-*/_count?pretty"
 ```
 
-### Compare ingestion methods
+### Compare Ingestion Methods
 
-| Feature | Python Script | Logstash | Filebeat | Ingest Pipeline |
-|---|---|---|---|---|
-| Complexity | Low to medium | Medium | Low | Low |
-| Main purpose | Custom ingestion and migration | Parsing and ETL | Lightweight log shipping | Index-time enrichment |
-| Transformation power | Full Python logic | Rich plugin ecosystem | Limited processors | Moderate processors |
-| Resource usage | Low | Higher, JVM-based | Very low | Runs inside Elasticsearch |
-| Throughput | Good with Bulk API | High | High | High, but uses ingest node CPU |
-| Buffering | Must be implemented or handled by client | Built in | Built in | None by itself |
-| Best use case | CSV/API/database migration | Complex logs and multi-step pipelines | Shipping logs from many machines | Simple field enrichment |
+| Feature              | Python Script                            | Logstash                              | Filebeat                         | Ingest Pipeline                |
+| -- | - | - | -- |  |
+| Complexity           | Low to medium                            | Medium                                | Low                              | Low                            |
+| Main purpose         | Custom ingestion and migration           | Parsing and ETL                       | Lightweight log shipping         | Index-time enrichment          |
+| Transformation power | Full Python logic                        | Rich plugin ecosystem                 | Limited processors               | Moderate processors            |
+| Resource usage       | Low                                      | Higher, JVM-based                     | Very low                         | Runs inside Elasticsearch      |
+| Throughput           | Good with Bulk API                       | High                                  | High                             | High, but uses ingest node CPU |
+| Buffering            | Must be implemented or handled by client | Built in                              | Built in                         | None by itself                 |
+| Best use case        | CSV, API, or database migration          | Complex logs and multi-step pipelines | Shipping logs from many machines | Simple field enrichment        |
 
-### When to use each method
 
-- Use **Python** when you need custom business logic, one-time migrations, API extraction, CSV cleanup, or repeatable data preparation.
-- Use **Logstash** when data needs heavy parsing, conditionals, grok patterns, external lookups, or multiple outputs.
-- Use **Filebeat** when logs are already structured or only need light processing before Elasticsearch.
-- Use **Elasticsearch ingest pipelines** when transformations are simple and should happen at index time.
-- Combine methods when needed, for example: `Filebeat -> Logstash -> Elasticsearch` for lightweight collection plus centralized parsing.
+### When to Use Each Method
 
-## Full Lab Run Order
+Use Python when:
 
-Use this sequence from a clean project folder:
+* You need custom business logic.
+* You are doing a one-time migration.
+* You need to read data from CSV files, APIs, or databases.
+* You need strong control over validation, retries, batching, and error handling.
 
-```bash
-# 1. Create and activate the Python environment
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+Use Logstash when:
 
-# 2. Start external services
-docker compose up -d
-python3 scripts/wait_for_elasticsearch.py
+* Logs require heavy parsing.
+* You need grok patterns.
+* You need conditional transformations.
+* You need enrichment before indexing.
+* You need multiple inputs or outputs.
+* You want a centralized processing layer.
 
-# 3. Prepare Elasticsearch and load product data
-python3 scripts/prepare_products.py --rows 100 --output data/products.csv
-python3 scripts/setup_elastic_assets.py --reset
-python3 scripts/ingest_products_bulk.py --csv data/products.csv --pipeline enrich-products
+Use Filebeat when:
 
-# 4. Generate logs for Logstash and Filebeat
-python3 scripts/generate_logs.py --rate 10 --duration-minutes 3
+* Logs are already structured.
+* You need a lightweight shipper.
+* You want to collect logs from many machines.
+* You only need simple processors before Elasticsearch.
 
-# 5. Verify all results
-python3 scripts/check_results.py
+Use Elasticsearch ingest pipelines when:
+
+* Transformations are simple.
+* Enrichment should happen at index time.
+* You want consistent transformations regardless of the sending client.
+* You do not need a separate processing service.
+
+Combine methods when needed.
+
+For example:
+
+```text
+Filebeat -> Logstash -> Elasticsearch
 ```
 
-With Make:
-
-```bash
-make start
-make ingest
-make logs
-make check
-```
-
-Stop the stack:
-
-```bash
-make stop
-```
-
-Clean all Docker volumes and generated data:
-
-```bash
-make clean
-```
+This design is common when you want lightweight log collection on many machines but centralized parsing and enrichment in Logstash.
 
 ## Kibana Exploration
 
@@ -1374,18 +1936,19 @@ filebeat-app-*
 
 Useful fields to inspect:
 
-| Index pattern | Fields |
-|---|---|
-| `products` | `category`, `price`, `price_tier`, `available_label`, `rating` |
+| Index Pattern        | Fields                                                                     |
+| -- | -- |
+| `products`           | `category`, `price`, `price_tier`, `available_label`, `rating`             |
 | `weblogs-logstash-*` | `clientip`, `verb`, `request`, `response`, `bytes`, `tags`, `geo.location` |
-| `filebeat-app-*` | `service`, `level`, `status`, `latency_ms`, `error_class`, `trace_id` |
+| `filebeat-app-*`     | `service`, `level`, `status`, `latency_ms`, `error_class`, `trace_id`      |
 
 Example Kibana questions:
 
-- How many products are `premium` versus `standard`?
-- Which HTTP status codes appear most often in `weblogs-logstash-*`?
-- Which services produce the most `server_error` events?
-- What is the average `latency_ms` by service?
+* How many products are `premium` versus `standard`?
+* Which HTTP status codes appear most often in `weblogs-logstash-*`?
+* Which services produce the most `server_error` events?
+* What is the average `latency_ms` by service?
+* Which web requests produce the largest responses?
 
 ## Troubleshooting Tips
 
