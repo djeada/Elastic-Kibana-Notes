@@ -14,20 +14,6 @@ By the end of this lab, you will be able to:
 - Verify indexed data from the command line and in Kibana.
 - Compare Python ingestion, Logstash, Filebeat, and ingest pipelines.
 
-# Task 6: Data Ingestion with Python, Logstash, Filebeat, and Elasticsearch
-
-> This is a single Markdown lab file. Each config or script is placed inside the task section where it is used, instead of being collected as one blob at the bottom.
-
-## Objectives
-
-- Ingest structured data into Elasticsearch with Python and the Bulk API.
-- Prepare data automatically instead of manually typing sample records.
-- Transform and enrich documents during ingestion.
-- Run Logstash in Docker to parse Apache-style access logs.
-- Run Filebeat in Docker to ship JSON application logs.
-- Generate continuous demo logs at a controlled rate, for example 10 events per minute.
-- Compare direct API ingestion, Logstash, Filebeat, and Elasticsearch ingest pipelines.
-
 ## Data Ingestion Pipeline Overview
 
 ```text
