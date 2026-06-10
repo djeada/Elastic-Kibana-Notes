@@ -242,22 +242,6 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-### Install Python dependencies
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-On Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
 ### Start Elasticsearch, Kibana, Logstash, and Filebeat
 
 ```bash
@@ -283,8 +267,6 @@ Verify that the services are available:
 ```bash
 curl http://localhost:9200
 ```
-
----
 
 ## Task 1: Sample Data Preparation
 
@@ -386,8 +368,6 @@ Preview the generated file:
 ```bash
 head data/products.csv
 ```
-
----
 
 ## Task 2: Data Ingestion via Python Bulk API
 
@@ -715,8 +695,6 @@ Example enriched document fields:
 }
 ```
 
----
-
 ## Task 3: Using Logstash with Advanced Filters
 
 Logstash is useful when logs need richer parsing, transformations, conditional logic, and enrichment before indexing.
@@ -969,8 +947,6 @@ Example parsed output fields:
 }
 ```
 
----
-
 ## Task 4: Filebeat Configuration
 
 Filebeat is a lightweight log shipper. In this lab, Filebeat reads JSON application logs and sends them directly to Elasticsearch.
@@ -1082,8 +1058,6 @@ Example enriched document field added by the Elasticsearch ingest pipeline:
   "ingested_at": "2026-06-10T12:06:31.120Z"
 }
 ```
-
----
 
 ## Task 5: Elasticsearch Ingest Pipelines
 
@@ -1222,8 +1196,6 @@ Expected classifications:
 200 -> none
 ```
 
----
-
 ## Task 6: Comparing and Verifying Ingestion Methods
 
 At this point, all three ingestion paths should be active:
@@ -1337,8 +1309,6 @@ curl "http://localhost:9200/filebeat-app-*/_count?pretty"
 - Use **Elasticsearch ingest pipelines** when transformations are simple and should happen at index time.
 - Combine methods when needed, for example: `Filebeat -> Logstash -> Elasticsearch` for lightweight collection plus centralized parsing.
 
----
-
 ## Full Lab Run Order
 
 Use this sequence from a clean project folder:
@@ -1385,8 +1355,6 @@ Clean all Docker volumes and generated data:
 ```bash
 make clean
 ```
-
----
 
 ## Kibana Exploration
 
