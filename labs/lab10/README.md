@@ -4,9 +4,9 @@
 
 ```
 ┌──────────┐      TLS/SSL       ┌────────────────┐     ┌────────────────┐     ┌───────────────┐
-│  Client   │ ────────────────► │ Authentication │ ──► │ Authorization  │ ──► │ Elasticsearch │
-│ (curl /   │  encrypted channel │ Who are you?   │     │ What can you   │     │   Cluster     │
-│  Python)  │ ◄──────────────── │ (credentials / │     │ access? (roles │     │  (data layer) │
+│  Client  │ ────────────────►  │ Authentication │ ──► │ Authorization  │ ──► │ Elasticsearch │
+│ (curl /  │  encrypted channel │ Who are you?   │     │ What can you   │     │   Cluster     │
+│  Python) │ ◄────────────────  │ (credentials / │     │ access? (roles │     │  (data layer) │
 └──────────┘                    │  API key)      │     │  / privileges) │     └───────────────┘
                                 └────────────────┘     └────────────────┘
 ```
@@ -22,8 +22,6 @@
 - Perform secure HTTPS requests from Python with certificate verification.
 - Diagnose common security errors.
 
----
-
 ### Security in Elasticsearch 8+
 
 Starting with version 8.0, security is **enabled by default**. A fresh cluster automatically:
@@ -34,8 +32,6 @@ Starting with version 8.0, security is **enabled by default**. A fresh cluster a
 4. Prints enrollment tokens for Kibana and additional nodes.
 
 > **Tip:** In a fresh 8.x install no extra configuration is required. Upgrades from 7.x need manual enablement.
-
----
 
 ### Step 1: Verify Authentication
 
@@ -60,8 +56,6 @@ GET /_security/_authenticate
 
 > **Important:** A `401 Unauthorized` response means the credentials are wrong or
 > `xpack.security.enabled` is not `true` in `elasticsearch.yml`.
-
----
 
 ### Step 2: Built-in Roles Overview
 
@@ -92,8 +86,6 @@ GET /_security/role?pretty
   }
 }
 ```
-
----
 
 ### Step 3: Create Custom Roles
 
@@ -138,8 +130,6 @@ POST /_security/role/app_writer
 ```json
 { "role": { "created": true } }
 ```
-
----
 
 ### Step 4: Create Users and Assign Roles
 
@@ -199,8 +189,6 @@ curl -s -u john:J0hn_S3cure! --cacert config/certs/http_ca.crt \
 }
 ```
 
----
-
 ### Step 5: Test Access Control
 
 Attempt a **write** as the read-only user `john`:
@@ -252,8 +240,6 @@ curl -s -u jane:J4ne_S3cure! --cacert config/certs/http_ca.crt \
   "_shards": { "total": 2, "successful": 1, "failed": 0 }
 }
 ```
-
----
 
 ### Step 6: TLS/SSL Configuration
 
@@ -316,8 +302,6 @@ curl -s --cacert config/certs/http_ca.crt -u elastic:${ELASTIC_PASSWORD} \
 }
 ```
 
----
-
 ### Step 7: API Key Authentication
 
 API keys are ideal for services and CI/CD pipelines where long-lived credentials are impractical.
@@ -373,8 +357,6 @@ curl -s -H "Authorization: ApiKey VnVhQ2ZHY0JDZGJrUW0tZTVhT3g6dWkybHAyYXhUTm1zeW
   }
 }
 ```
-
----
 
 ### Step 8: Python Secure Request Examples
 
@@ -440,8 +422,6 @@ print(resp.json())
 }
 ```
 
----
-
 ### Troubleshooting Tips
 
 | Problem | Likely Cause | Solution |
@@ -452,8 +432,6 @@ print(resp.json())
 | `Connection refused` on port 9200 | Node not running or wrong `network.host` | Check `elasticsearch.yml` and restart |
 | `security_exception ... is unauthorized` | User lacks the required privilege | Review the role's `indices` / `cluster` privileges |
 | `api_key ... is expired` | API key past its expiration | Create a new key with a longer `expiration` |
-
----
 
 ### Reflection
 
