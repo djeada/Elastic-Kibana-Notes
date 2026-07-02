@@ -39,7 +39,6 @@
 Create a `docker-compose.yml` with resource limits and persistent volumes:
 
 ```yaml
-version: '3.8'
 services:
   es1:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.6.0
@@ -49,10 +48,10 @@ services:
       - cluster.name=es_cluster
       - node.roles=master,data
       - discovery.seed_hosts=es2,es3
-      - cluster.initial_master_nodes=es1,es2,es3
+      - cluster.initial_master_nodes=es1
       - bootstrap.memory_lock=true
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
     ulimits:
       memlock:
         soft: -1
@@ -67,7 +66,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 2G
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
@@ -82,10 +81,10 @@ services:
       - cluster.name=es_cluster
       - node.roles=data,ingest
       - discovery.seed_hosts=es1,es3
-      - cluster.initial_master_nodes=es1,es2,es3
+      - cluster.initial_master_nodes=es1
       - bootstrap.memory_lock=true
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
     ulimits:
       memlock:
         soft: -1
@@ -99,7 +98,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 2G
 
   es3:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.6.0
@@ -109,10 +108,10 @@ services:
       - cluster.name=es_cluster
       - node.roles=data,ingest
       - discovery.seed_hosts=es1,es2
-      - cluster.initial_master_nodes=es1,es2,es3
+      - cluster.initial_master_nodes=es1
       - bootstrap.memory_lock=true
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
     ulimits:
       memlock:
         soft: -1
@@ -126,7 +125,21 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 2G
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.6.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://es1:9200
+      - XPACK_SECURITY_ENABLED=false
+    ports:
+      - "5601:5601"
+    networks:
+      - es_net
+    depends_on:
+      es1:
+        condition: service_healthy
 
 volumes:
   es1_data:
