@@ -486,8 +486,6 @@ GET /products/_search
 
 The exact numbers will be different on your machine. Focus on the relative cost of each phase rather than the specific nanosecond values.
 
----
-
 ### Understanding Profile Timing Fields
 
 | Field            | Description                                                  |
